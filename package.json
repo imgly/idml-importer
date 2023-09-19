@@ -1,0 +1,39 @@
+{
+  "name": "idml-importer",
+  "version": "0.0.1",
+  "module": "dist/browser.js",
+  "types": "dist/browser.d.ts",
+  "type": "module",
+  "devDependencies": {
+    "bun-plugin-dts": "^0.2.0",
+    "bun-types": "latest",
+    "@cesdk/engine": "^1.16.1",
+    "@cesdk/node": "^1.16.1",
+    "jest-image-snapshot": "^6.2.0",
+    "jsdom": "^22.1.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "prepare-example-files": "./scripts/prepare-files.sh test/examples",
+    "prepare-files": "./scripts/prepare-files.sh",
+    "build": "bun run build.ts",
+    "test": "bun run build.ts"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/browser.d.ts",
+        "default": "./dist/browser.js"
+      },
+      "require": {
+        "types": "./dist/browser.d.ts",
+        "default": "./dist/browser.js"
+      }
+    }
+  }
+}

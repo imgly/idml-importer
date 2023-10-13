@@ -1,25 +1,48 @@
 {
-  "name": "idml-importer",
-  "version": "0.0.1",
+  "name": "@imgly/idml-importer",
+  "version": "0.0.7",
   "module": "dist/browser.js",
   "types": "dist/browser.d.ts",
   "type": "module",
+  "description": "Import IDML files into the Creative Editor Ecosystem",
+  "keywords": [
+    "creativ-editor-sdk",
+    "indesign",
+    "import",
+    "idml"
+  ],
+  "author": {
+    "name": "IMG.LY GmbH",
+    "email": "support@img.ly",
+    "url": "https://img.ly"
+  },
+  "bugs": {
+    "email": "support@img.ly"
+  },
+  "homepage": "https://img.ly/showcases/cesdk/indesign-template-import/web",
   "devDependencies": {
-    "bun-plugin-dts": "^0.2.0",
-    "bun-types": "latest",
     "@cesdk/engine": "^1.16.1",
     "@cesdk/node": "^1.16.1",
+    "bun-plugin-dts": "^0.2.0",
+    "bun-types": "latest",
     "jest-image-snapshot": "^6.2.0",
     "jsdom": "^22.1.0"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
+  "files": [
+    "LICENSE.md",
+    "README.md",
+    "dist/",
+    "dist/assets/"
+  ],
   "scripts": {
     "prepare-example-files": "./scripts/prepare-files.sh test/examples",
     "prepare-files": "./scripts/prepare-files.sh",
-    "build": "bun run build.ts",
-    "test": "bun run build.ts"
+    "build": "cp -r ./assets dist/ && bun run build.ts",
+    "test": "bun run build.ts",
+    "publish": "npm run build && npm publish --access public"
   },
   "dependencies": {
     "jszip": "^3.10.1"

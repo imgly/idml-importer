@@ -38,7 +38,15 @@ yarn add @imgly/idml-importer
 ## Browser Quick-Start Example
 
 ```js
-import { IDMLParser } from "idml-importer";
+import CreativeEngine from "@cesdk/engine";
+import { IDMLParser } from "@imgly/idml-importer";
+
+const blob = await fetch(
+  "https://img.ly/showcases/cesdk/cases/indesign-template-import/socialmedia.idml"
+).then((res) => res.blob());
+const engine = await CreativeEngine.init({
+  license: "YOUR_LICENSE",
+});
 const parser = await IDMLParser.fromFile(engine, blob, (content) =>
   new DOMParser().parseFromString(content, "text/xml")
 );
@@ -49,8 +57,9 @@ const image = await engine.block.export(
   engine.block.findByType("//ly.img.ubq/page")[0],
   "image/png"
 );
-const sceneExportUrl = window.URL.createObjectURL(data);
+const sceneExportUrl = window.URL.createObjectURL(image);
 console.log("The imported IDML file looks like:", sceneExportUrl);
+// You can now e.g export the scene as archive with engine.scene.saveToArchive()
 ```
 
 ## NodeJS Quick-Start Example
@@ -58,24 +67,33 @@ console.log("The imported IDML file looks like:", sceneExportUrl);
 When using in NodeJS, you need to provide a DOM implementation. We recommend using JSDOM.
 
 ```js
+// index.mjs
+// We currently only support ES Modules in NodeJS
 import CreativeEngine from "@cesdk/node";
 import { promises as fs } from "fs";
 import { JSDOM } from "jsdom";
-import { IDMLParser } from "idml-importer";
+import { IDMLParser } from "@imgly/idml-importer";
 
 async function main() {
   const engine = await CreativeEngine.init({
-    license: process.env.NEXT_PUBLIC_LICENSE,
+    license: "YOUR_LICENSE",
   });
 
-  const exampleFile = await fs.readFile("./example.idml");
-  const parser = await IDMLParser.fromFile(engine, exampleFile, (content) => {
-    return new JSDOM(content, {
-      contentType: "text/xml",
-      storageQuota: 10000000,
-      url: "http://localhost",
-    }).window.document;
-  });
+  const idmlSampleUrl =
+    "https://img.ly/showcases/cesdk/cases/indesign-template-import/socialmedia.idml";
+  const idmlSample = await fetch(idmlSampleUrl).then((res) => res.blob());
+  const idmlSampleBuffer = await idmlSample.arrayBuffer();
+  const parser = await IDMLParser.fromFile(
+    engine,
+    idmlSampleBuffer,
+    (content) => {
+      return new JSDOM(content, {
+        contentType: "text/xml",
+        storageQuota: 10000000,
+        url: "http://localhost",
+      }).window.document;
+    }
+  );
   await parser.parse();
 
   const image = await engine.block.export(

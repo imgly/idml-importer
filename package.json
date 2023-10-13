@@ -1,6 +1,6 @@
 {
   "name": "@imgly/idml-importer",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "module": "dist/browser.js",
   "types": "dist/browser.d.ts",
   "type": "module",

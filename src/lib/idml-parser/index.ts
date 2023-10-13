@@ -41,7 +41,7 @@ export class IDMLParser {
   // The IDML file contents
   private idml: IDML;
   // A function that resolves the font URI from the font name and style
-  private fontResolver: (font: Font) => string | null;
+  private fontResolver: (font: Font) => Promise<string | null>;
   // A map of the colors used in the IDML document and their RGBA values
   private colors: Map<string, RGBA>;
   // A map of the gradients used in the IDML document and their GradientColorStop values
@@ -53,7 +53,7 @@ export class IDMLParser {
   private constructor(
     engine: CreativeEngine,
     idml: IDML,
-    fontResolver?: (font: Font) => string | null
+    fontResolver?: (font: Font) => Promise<string | null>
   ) {
     this.engine = engine;
     this.idml = idml;
@@ -112,7 +112,7 @@ export class IDMLParser {
     engine: CreativeEngine,
     file: Blob | File | ArrayBuffer,
     DOMParser: any,
-    fontResolver?: (font: Font) => string | null
+    fontResolver?: (font: Font) => Promise<string | null>
   ) {
     const idml = await unzipIdmlFile(file, DOMParser);
     return new IDMLParser(engine, idml, fontResolver);
@@ -537,7 +537,7 @@ export class IDMLParser {
             });
 
             // get the font URI from the font resolver
-            const fontURI = this.fontResolver(font);
+            const fontURI = await this.fontResolver(font);
             if (fontURI) {
               // Test if the font is loadable by creating a FontFace
               // If the font is loadable, we set the font URI on the text block

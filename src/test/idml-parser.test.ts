@@ -1,9 +1,9 @@
 import CreativeEngine from "@cesdk/node";
 import { expect, test } from "bun:test";
-import { JSDOM } from "jsdom";
-import { IDMLParser } from "../lib/idml-parser";
 import fs from "fs";
 import glob from "glob";
+import { JSDOM } from "jsdom";
+import { IDMLParser } from "../lib/idml-parser";
 const filePaths = glob.sync("./test/examples/**/*.idml");
 
 function DOMParser(content: string) {
@@ -19,9 +19,7 @@ test(
   async () => {
     const testExportFolder = async (filePath: string) => {
       const expectedIDMLFileName = filePath.split("/").pop();
-      // folder path e.g "test/examples/BRAND_Bank_Poster_H_STRIP"
       const idmlFolderPath = filePath.split("/").slice(0, -1).join("/");
-      // expect(expectedIDMLFileName).toEqual("BRAND_Bank_Poster_H_STRIP.idml");
       const idmlFilePath = filePath;
       const filenameWithoutExtension = expectedIDMLFileName!.split(".")[0];
 

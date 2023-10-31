@@ -171,6 +171,7 @@ dist
 # IntelliJ based IDEs
 .idea
 
-test/output/
+src/test/output/
+src/test/examples/
 
 .DS_STORE

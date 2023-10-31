@@ -37,6 +37,7 @@
     "dist/assets/"
   ],
   "scripts": {
+    "download-example-files": "gsutil -m cp -r \"gs://idml-importer-customer-samples/\" ./src/test/examples",
     "prepare-example-files": "./scripts/prepare-files.sh test/examples",
     "prepare-files": "./scripts/prepare-files.sh",
     "build": "cp -r ./assets dist/ && bun run build.ts",

@@ -4,7 +4,7 @@ import fs from "fs";
 import glob from "glob";
 import { JSDOM } from "jsdom";
 import { IDMLParser } from "../lib/idml-parser";
-const filePaths = glob.sync("./test/examples/**/*.idml");
+const filePaths = glob.sync("./src/test/examples/**/*.idml");
 
 function DOMParser(content: string) {
   return new JSDOM(content, {
@@ -46,7 +46,7 @@ test(
           })
         )
       );
-      const outputFolderPath = `./test/output/examples/${filenameWithoutExtension}`;
+      const outputFolderPath = `./src/test/output/examples/${filenameWithoutExtension}`;
       // create directory paths to file if not exists using fs
 
       if (!fs.existsSync(outputFolderPath)) {

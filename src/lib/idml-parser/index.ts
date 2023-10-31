@@ -12,7 +12,31 @@ import {
   unzipIdmlFile,
 } from "./utils";
 import { Logger } from "./logger";
-import CreativeEngine, { DesignBlockType } from "@cesdk/engine";
+import type CreativeEngine from "@cesdk/engine";
+
+// Inlining the design block types, so that we do not need any non-type reference to the engine
+enum DesignBlockType {
+  Scene = "//ly.img.ubq/scene",
+  Stack = "//ly.img.ubq/stack",
+  Camera = "//ly.img.ubq/camera",
+  Page = "//ly.img.ubq/page",
+  Image = "//ly.img.ubq/image",
+  Design = "//ly.img.ubq/design",
+  Video = "//ly.img.ubq/video",
+  VideoFill = "//ly.img.ubq/fill/video",
+  ImageFill = "//ly.img.ubq/fill/image",
+  Audio = "//ly.img.ubq/audio",
+  Text = "//ly.img.ubq/text",
+  Sticker = "//ly.img.ubq/sticker",
+  VectorPath = "//ly.img.ubq/vector_path",
+  RectShape = "//ly.img.ubq/shapes/rect",
+  LineShape = "//ly.img.ubq/shapes/line",
+  StarShape = "//ly.img.ubq/shapes/star",
+  PolygonShape = "//ly.img.ubq/shapes/polygon",
+  EllipseShape = "//ly.img.ubq/shapes/ellipse",
+  Group = "//ly.img.ubq/group",
+  Cutout = "//ly.img.ubq/cutout",
+}
 
 // The design unit used in the CESDK Editor
 const DESIGN_UNIT = "Inch";

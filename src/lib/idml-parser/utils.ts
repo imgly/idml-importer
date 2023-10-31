@@ -1,4 +1,4 @@
-import { GradientColorStop, RGBAColor } from "@cesdk/node";
+import type { GradientColorStop, RGBAColor } from "@cesdk/engine";
 import JSZip from "jszip";
 import type { CMYK, Gradient, IDML, RGBA, Vector2 } from "./types";
 import { Logger } from "./logger";

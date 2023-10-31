@@ -1,4 +1,4 @@
-import { GradientColorStop } from "@cesdk/node";
+import { type GradientColorStop } from "@cesdk/engine";
 
 export type RGBA = [r: number, g: number, b: number, a: number];
 

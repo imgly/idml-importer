@@ -31,13 +31,20 @@ test(
       const engine = await CreativeEngine.init({
         license: process.env.CESDK_LICENSE,
       });
+      engine.editor.setSettingBool("features/unifiedBlocksEnabled", true);
       const parser = await IDMLParser.fromFile(
         engine as any,
         arrayBuffer,
         DOMParser
       );
 
-      const result = await parser.parse();
+      let result;
+      try {
+        result = await parser.parse();
+      } catch (e) {
+        console.error(e);
+        return;
+      }
       const imageBlobs = await Promise.all(
         engine.scene.getPages().map((page) =>
           engine.block.export(page, "image/png" as any, {

@@ -21,7 +21,7 @@ enum DesignBlockType {
   Camera = "//ly.img.ubq/camera",
   Page = "//ly.img.ubq/page",
   Image = "//ly.img.ubq/image",
-  Design = "//ly.img.ubq/design",
+  Graphic = "//ly.img.ubq/graphic",
   Video = "//ly.img.ubq/video",
   VideoFill = "//ly.img.ubq/fill/video",
   ImageFill = "//ly.img.ubq/fill/image",
@@ -36,6 +36,10 @@ enum DesignBlockType {
   EllipseShape = "//ly.img.ubq/shapes/ellipse",
   Group = "//ly.img.ubq/group",
   Cutout = "//ly.img.ubq/cutout",
+  ColorFill = "//ly.img.ubq/fill/color",
+  LinearGradientFill = "//ly.img.ubq/fill/gradient/linear",
+  RadialGradientFill = "//ly.img.ubq/fill/gradient/radial",
+  ConicalGradientFill = "//ly.img.ubq/fill/gradient/conical",
 }
 
 // The design unit used in the CESDK Editor
@@ -286,16 +290,26 @@ export class IDMLParser {
             let block: number;
 
             // If the rectangle has an image URI, create an image block
+            block = this.engine.block.create(DesignBlockType.Graphic);
             if (imageURI) {
-              block = this.engine.block.create(DesignBlockType.Image);
+              const fill = this.engine.block.createFill(
+                "//ly.img.ubq/fill/image"
+              );
+              this.engine.block.setFill(block, fill);
+              this.engine.block.setKind(block, "image");
               this.engine.block.setString(
-                block,
-                "image/imageFileURI",
+                fill,
+                "fill/image/imageFileURI",
                 imageURI
               );
+              const shape = this.engine.block.createShape(
+                "//ly.img.ubq/shape/rect"
+              );
+              this.engine.block.setShape(block, shape);
+              // console.log("imageURI", imageURI);
             } else {
               // Otherwise, create a rectangle block
-              block = this.engine.block.create(DesignBlockType.RectShape);
+              this.engine.block.setKind(block, "shape");
             }
 
             this.applyStroke(block, element);
@@ -315,9 +329,7 @@ export class IDMLParser {
             this.engine.block.setHeight(block, height);
             this.engine.block.setRotation(block, rectAttributes.rotation);
 
-            if (
-              this.engine.block.getType(block) === DesignBlockType.RectShape
-            ) {
+            if (this.engine.block.getKind(block) === "shape") {
               // Fill needs to be applied after setting height and width, because gradient fills need the dimensions
               this.applyFill(block, element);
             }
@@ -333,9 +345,12 @@ export class IDMLParser {
             );
 
             // Create an ellipse block
-            const block = this.engine.block.create(
-              DesignBlockType.EllipseShape
+            const block = this.engine.block.create(DesignBlockType.Graphic);
+            this.engine.block.setKind(block, "shape");
+            const shape = this.engine.block.createShape(
+              "//ly.img.ubq/shape/ellipse"
             );
+            this.engine.block.setShape(block, shape);
 
             this.applyFill(block, element);
             this.applyStroke(block, element);
@@ -366,21 +381,26 @@ export class IDMLParser {
             );
 
             // Create a vector path block
-            const block = this.engine.block.create(DesignBlockType.VectorPath);
+            const block = this.engine.block.create(DesignBlockType.Graphic);
+            this.engine.block.setKind(block, "shape");
+            const shape = this.engine.block.createShape(
+              "//ly.img.ubq/shape/vector_path"
+            );
+            this.engine.block.setShape(block, shape);
 
             // Set the vector path's path data, width, and height
             this.engine.block.setString(
-              block,
+              shape,
               "vector_path/path",
               polygonAttributes.pathData
             );
             this.engine.block.setFloat(
-              block,
+              shape,
               "vector_path/width",
               polygonAttributes.width
             );
             this.engine.block.setFloat(
-              block,
+              shape,
               "vector_path/height",
               polygonAttributes.height
             );
@@ -414,7 +434,10 @@ export class IDMLParser {
             );
 
             // Create a line block
-            const block = this.engine.block.create(DesignBlockType.LineShape);
+            const block = this.engine.block.create(DesignBlockType.Graphic);
+            this.engine.block.setKind(block, "shape");
+            const shape = this.engine.block.createShape("line");
+            this.engine.block.setShape(block, shape);
 
             this.applyTransparency(block, element);
 
@@ -640,8 +663,14 @@ export class IDMLParser {
             // If the text frame has a fill color, we create a rectangle block to use as the background
             if (element.getAttribute("FillColor")) {
               const backgroundBlock = this.engine.block.create(
-                DesignBlockType.RectShape
+                DesignBlockType.Graphic
               );
+              this.engine.block.setKind(backgroundBlock, "shape");
+              const shape = this.engine.block.createShape(
+                "//ly.img.ubq/shape/rect"
+              );
+              this.engine.block.setShape(backgroundBlock, shape);
+
               this.engine.block.appendChild(pageBlock, backgroundBlock);
               this.engine.block.setPositionX(backgroundBlock, x);
               this.engine.block.setPositionY(backgroundBlock, y);
@@ -755,7 +784,9 @@ export class IDMLParser {
       this.engine.block.setFill(block, gradientFill);
     } else {
       this.engine.block.setFillEnabled(block, false);
-      console.log(`Fill color ${fillColor} not found in document colors.`);
+      if (fillColor !== "Swatch/None") {
+        console.log(`Fill color ${fillColor} not found in document colors.`);
+      }
     }
   }
 

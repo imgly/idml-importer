@@ -671,7 +671,13 @@ export class IDMLParser {
               );
               this.engine.block.setShape(backgroundBlock, shape);
 
-              this.engine.block.appendChild(pageBlock, backgroundBlock);
+              const positionBeforeTextBlock =
+                this.engine.block.getChildren(pageBlock).length - 2;
+              this.engine.block.insertChild(
+                pageBlock,
+                backgroundBlock,
+                positionBeforeTextBlock
+              );
               this.engine.block.setPositionX(backgroundBlock, x);
               this.engine.block.setPositionY(backgroundBlock, y);
               this.engine.block.setWidth(backgroundBlock, width);

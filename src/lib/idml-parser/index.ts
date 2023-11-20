@@ -1,6 +1,9 @@
+import type CreativeEngine from "@cesdk/engine";
+import { RGBAColor } from "@cesdk/engine";
 import type { Font } from "./font-resolver";
 import defaultFontResolver from "./font-resolver";
-import type { Gradient, IDML, RGBA } from "./types";
+import { Logger } from "./logger";
+import type { Gradient, IDML } from "./types";
 import {
   angleToGradientControlPoints,
   extractColors,
@@ -11,8 +14,6 @@ import {
   replaceSpecialCharacters,
   unzipIdmlFile,
 } from "./utils";
-import { Logger } from "./logger";
-import type CreativeEngine from "@cesdk/engine";
 
 // Inlining the design block types, so that we do not need any non-type reference to the engine
 enum DesignBlockType {
@@ -71,7 +72,7 @@ export class IDMLParser {
   // A function that resolves the font URI from the font name and style
   private fontResolver: (font: Font) => Promise<string | null>;
   // A map of the colors used in the IDML document and their RGBA values
-  private colors: Map<string, RGBA>;
+  private colors: Map<string, RGBAColor>;
   // A map of the gradients used in the IDML document and their GradientColorStop values
   private gradients: Map<string, Gradient>;
   private spreads: Document[];
@@ -540,10 +541,9 @@ export class IDMLParser {
               const rgba = this.colors.get(color);
 
               if (rgba) {
-                const [r, g, b, a] = rgba;
                 this.engine.block.setTextColor(
                   block,
-                  { r, g, b, a },
+                  rgba,
                   length,
                   length + content.length
                 );
@@ -737,9 +737,9 @@ export class IDMLParser {
     // if the element has a fill color, we extract the RGBA values
     // from the document colors using the ID and apply the fill to the block
     if (this.colors.has(fillColor)) {
-      const rgba = this.colors.get(fillColor)!;
+      const color = this.colors.get(fillColor)!;
       const fill = this.engine.block.createFill("color");
-      this.engine.block.setColorRGBA(fill, "fill/color/value", ...rgba);
+      this.engine.block.setColor(fill, "fill/color/value", color);
       this.engine.block.setFill(block, fill);
     } else if (this.gradients.has(fillColor)) {
       const gradient = this.gradients.get(fillColor)!;
@@ -821,7 +821,7 @@ export class IDMLParser {
       const rgba = this.colors.get(strokeColor)!;
       const width = parseFloat(strokeWeight) / PIXEL_SCALE_FACTOR;
       this.engine.block.setStrokeWidth(block, width);
-      this.engine.block.setStrokeColorRGBA(block, ...rgba);
+      this.engine.block.setStrokeColor(block, rgba);
 
       // Set the stroke alignment
       switch (strokeAlignment) {

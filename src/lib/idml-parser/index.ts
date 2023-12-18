@@ -15,34 +15,6 @@ import {
   unzipIdmlFile,
 } from "./utils";
 
-// Inlining the design block types, so that we do not need any non-type reference to the engine
-enum DesignBlockType {
-  Scene = "//ly.img.ubq/scene",
-  Stack = "//ly.img.ubq/stack",
-  Camera = "//ly.img.ubq/camera",
-  Page = "//ly.img.ubq/page",
-  Image = "//ly.img.ubq/image",
-  Graphic = "//ly.img.ubq/graphic",
-  Video = "//ly.img.ubq/video",
-  VideoFill = "//ly.img.ubq/fill/video",
-  ImageFill = "//ly.img.ubq/fill/image",
-  Audio = "//ly.img.ubq/audio",
-  Text = "//ly.img.ubq/text",
-  Sticker = "//ly.img.ubq/sticker",
-  VectorPath = "//ly.img.ubq/vector_path",
-  RectShape = "//ly.img.ubq/shapes/rect",
-  LineShape = "//ly.img.ubq/shapes/line",
-  StarShape = "//ly.img.ubq/shapes/star",
-  PolygonShape = "//ly.img.ubq/shapes/polygon",
-  EllipseShape = "//ly.img.ubq/shapes/ellipse",
-  Group = "//ly.img.ubq/group",
-  Cutout = "//ly.img.ubq/cutout",
-  ColorFill = "//ly.img.ubq/fill/color",
-  LinearGradientFill = "//ly.img.ubq/fill/gradient/linear",
-  RadialGradientFill = "//ly.img.ubq/fill/gradient/radial",
-  ConicalGradientFill = "//ly.img.ubq/fill/gradient/conical",
-}
-
 // The design unit used in the CESDK Editor
 const DESIGN_UNIT = "Inch";
 /**
@@ -105,7 +77,7 @@ export class IDMLParser {
     // we do not support different page sizes in the CESDK Editor yet
     this.scene = this.engine.scene.create("VerticalStack");
 
-    const stack = this.engine.block.findByType(DesignBlockType.Stack)[0];
+    const stack = this.engine.block.findByType("//ly.img.ubq/stack")[0];
     // set standard values for the stack block:
     this.engine.block.setFloat(stack, "stack/spacing", 35);
     this.engine.block.setBool(stack, "stack/spacingInScreenspace", true);
@@ -198,7 +170,7 @@ export class IDMLParser {
   // generate pages from the spreads in the IDML file
   private async generatePagesFromSpreads() {
     // find the stack block in the scene to append the pages to
-    const stack = this.engine.block.findByType(DesignBlockType.Stack)[0];
+    const stack = this.engine.block.findByType("//ly.img.ubq/stack")[0];
 
     const bleedMargin = this.getBleedMargins();
     const hasBleedMargin = Object.values(bleedMargin).some(
@@ -215,7 +187,7 @@ export class IDMLParser {
       // Get the page name and dimensions from the page element
       const pageAttributes = getPageAttributes(page);
       // Create a new page block
-      const pageBlock = this.engine.block.create(DesignBlockType.Page);
+      const pageBlock = this.engine.block.create("//ly.img.ubq/page");
 
       // Convert the page dimensions from points to the CESDK design unit
       const width = pageAttributes.width / PIXEL_SCALE_FACTOR;
@@ -291,7 +263,7 @@ export class IDMLParser {
             let block: number;
 
             // If the rectangle has an image URI, create an image block
-            block = this.engine.block.create(DesignBlockType.Graphic);
+            block = this.engine.block.create("//ly.img.ubq/graphic");
             if (imageURI) {
               const fill = this.engine.block.createFill(
                 "//ly.img.ubq/fill/image"
@@ -346,7 +318,7 @@ export class IDMLParser {
             );
 
             // Create an ellipse block
-            const block = this.engine.block.create(DesignBlockType.Graphic);
+            const block = this.engine.block.create("//ly.img.ubq/graphic");
             this.engine.block.setKind(block, "shape");
             const shape = this.engine.block.createShape(
               "//ly.img.ubq/shape/ellipse"
@@ -382,7 +354,7 @@ export class IDMLParser {
             );
 
             // Create a vector path block
-            const block = this.engine.block.create(DesignBlockType.Graphic);
+            const block = this.engine.block.create("//ly.img.ubq/graphic");
             this.engine.block.setKind(block, "shape");
             const shape = this.engine.block.createShape(
               "//ly.img.ubq/shape/vector_path"
@@ -435,7 +407,7 @@ export class IDMLParser {
             );
 
             // Create a line block
-            const block = this.engine.block.create(DesignBlockType.Graphic);
+            const block = this.engine.block.create("//ly.img.ubq/graphic");
             this.engine.block.setKind(block, "shape");
             const shape = this.engine.block.createShape("line");
             this.engine.block.setShape(block, shape);
@@ -490,7 +462,7 @@ export class IDMLParser {
             const parentStory = this.idml[`Stories/Story_${parentStoryId}.xml`];
 
             // Create a text block
-            const block = this.engine.block.create(DesignBlockType.Text);
+            const block = this.engine.block.create("//ly.img.ubq/text");
 
             const characterStyleRange = parentStory.querySelectorAll(
               "CharacterStyleRange"
@@ -663,7 +635,7 @@ export class IDMLParser {
             // If the text frame has a fill color, we create a rectangle block to use as the background
             if (element.getAttribute("FillColor")) {
               const backgroundBlock = this.engine.block.create(
-                DesignBlockType.Graphic
+                "//ly.img.ubq/graphic"
               );
               this.engine.block.setKind(backgroundBlock, "shape");
               const shape = this.engine.block.createShape(

@@ -1,9 +1,5 @@
 import { type GradientColorStop } from "@cesdk/engine";
 
-export type RGBA = [r: number, g: number, b: number, a: number];
-
-export type CMYK = [c: number, m: number, y: number, k: number];
-
 export type IDML = Record<string, Document>;
 
 export type Gradient = {

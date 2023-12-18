@@ -1,6 +1,6 @@
 {
   "name": "@imgly/idml-importer",
-  "version": "0.0.9",
+  "version": "1.0.2",
   "module": "dist/browser.js",
   "types": "dist/browser.d.ts",
   "type": "module",
@@ -24,11 +24,13 @@
     "bun-plugin-dts": "^0.2.0",
     "bun-types": "latest",
     "jest-image-snapshot": "^6.2.0",
-    "jsdom": "^22.1.0"
+    "jsdom": "^22.1.0",
+    "@cesdk/node": "^1.19.0",
+    "@cesdk/engine": "^1.19.0"
   },
   "peerDependencies": {
     "typescript": "^5.0.0",
-    "@cesdk/engine": "^1.16.1"
+    "@cesdk/engine": "^1.19.0"
   },
   "files": [
     "LICENSE.md",

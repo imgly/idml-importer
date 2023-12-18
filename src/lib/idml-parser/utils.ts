@@ -1,7 +1,7 @@
-import type { GradientColorStop, RGBAColor } from "@cesdk/engine";
+import type { GradientColorStop, RGBAColor, CMYKColor } from "@cesdk/engine";
 import JSZip from "jszip";
-import type { CMYK, Gradient, IDML, RGBA, Vector2 } from "./types";
 import { Logger } from "./logger";
+import type { Gradient, IDML, Vector2 } from "./types";
 /**
  * Extracts the contents of an IDML file into a map of filenames to XML documents
  *
@@ -357,19 +357,44 @@ export function extractColors(graphicResources: Document) {
 
       // If it's a CMYK color, convert it to RGBA
       if (space === "CMYK") {
-        const CMYK = colorValue.split(" ").map(parseFloat) as CMYK;
-        return [key, CMYKtoRGBA(CMYK)];
+        const CMYK = colorValue.split(" ").map(parseFloat);
+        return [
+          key,
+          CMYKtoRGBA({
+            c: CMYK[0],
+            m: CMYK[1],
+            y: CMYK[2],
+            k: CMYK[3],
+            tint: 1,
+          }),
+        ];
       }
 
       // If it's an RGB color, convert it to RGBA and normalize the values
       if (space === "RGB") {
         const [r, g, b] = colorValue.split(" ").map(parseFloat);
-        return [key, [r / 255, g / 255, b / 255, 1]];
+        return [
+          key,
+          {
+            r: r / 255,
+            g: g / 255,
+            b: b / 255,
+            a: 1,
+          },
+        ];
       }
 
       // Return black if the color space is unsupported
-      return [key, [0, 0, 0, 1]];
-    }) as [string, RGBA][]
+      return [
+        key,
+        {
+          r: 0,
+          g: 0,
+          b: 0,
+          a: 1,
+        },
+      ];
+    }) as [string, RGBAColor][]
   );
 }
 
@@ -382,7 +407,7 @@ export function extractColors(graphicResources: Document) {
  */
 export function extractGradients(
   graphicResources: Document,
-  colors: Map<string, RGBA>
+  colors: Map<string, RGBAColor>
 ): Map<string, Gradient> {
   return new Map(
     Array.from(graphicResources.querySelectorAll("Gradient")).map(
@@ -399,9 +424,7 @@ export function extractGradients(
               ? parseFloat(locationAttribute) / 100
               : index / (GradientStops.length - 1);
             const stop: GradientColorStop = {
-              color: rgbaArrayToObject(
-                getGradientStopColor(GradientStop, colors)
-              ),
+              color: getGradientStopColor(GradientStop, colors),
               stop: location,
             };
             return stop;
@@ -435,28 +458,19 @@ export function extractGradients(
  */
 function getGradientStopColor(
   gradientStop: Element,
-  colors: Map<string, RGBA>
-): RGBA {
+  colors: Map<string, RGBAColor>
+): RGBAColor {
   const color = gradientStop.getAttribute("StopColor")!;
   const colorValue = colors.get(color);
   if (colorValue) {
     return colorValue;
   }
   console.error("Unknown Gradient Stop Color Format found: ", color);
-  return [0, 0, 0, 0];
-}
-
-/**
- * Converts an RGBA color array to an object
- * @param rgba The RGBA color array to convert
- * @returns The RGBA color object
- */
-function rgbaArrayToObject(rgba: RGBA): RGBAColor {
   return {
-    r: rgba[0],
-    g: rgba[1],
-    b: rgba[2],
-    a: rgba[3],
+    r: 0,
+    g: 0,
+    b: 0,
+    a: 1,
   };
 }
 
@@ -466,12 +480,12 @@ function rgbaArrayToObject(rgba: RGBA): RGBAColor {
  * @param CMYK The CMYK color to convert
  * @returns The RGBA color
  */
-export function CMYKtoRGBA(CMYK: CMYK): RGBA {
+export function CMYKtoRGBA(CMYK: CMYKColor): RGBAColor {
   // Normalize the input color components to the range of [0,1]
-  const c = CMYK[0] / 100;
-  const m = CMYK[1] / 100;
-  const y = CMYK[2] / 100;
-  const k = CMYK[3] / 100;
+  const c = CMYK.c / 100;
+  const m = CMYK.m / 100;
+  const y = CMYK.y / 100;
+  const k = CMYK.k / 100;
 
   // Convert the normalized CMYK color into RGB components
   // Formula: new_color = 1 - min(1, input_color * (1 - K) + K)
@@ -479,7 +493,12 @@ export function CMYKtoRGBA(CMYK: CMYK): RGBA {
   const g = 1 - Math.min(1, m * (1 - k) + k);
   const b = 1 - Math.min(1, y * (1 - k) + k);
 
-  return [r, g, b, 1];
+  return {
+    r,
+    g,
+    b,
+    a: 1,
+  };
 }
 
 /**

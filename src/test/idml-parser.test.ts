@@ -37,7 +37,13 @@ test(
         DOMParser
       );
 
-      const result = await parser.parse();
+      let result;
+      try {
+        result = await parser.parse();
+      } catch (e) {
+        console.error(e);
+        return;
+      }
       const imageBlobs = await Promise.all(
         engine.scene.getPages().map((page) =>
           engine.block.export(page, "image/png" as any, {

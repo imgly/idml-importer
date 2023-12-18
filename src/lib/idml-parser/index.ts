@@ -264,6 +264,10 @@ export class IDMLParser {
 
             // If the rectangle has an image URI, create an image block
             block = this.engine.block.create("//ly.img.ubq/graphic");
+            const shape = this.engine.block.createShape(
+              "//ly.img.ubq/shape/rect"
+            );
+            this.engine.block.setShape(block, shape);
             if (imageURI) {
               const fill = this.engine.block.createFill(
                 "//ly.img.ubq/fill/image"
@@ -275,10 +279,6 @@ export class IDMLParser {
                 "fill/image/imageFileURI",
                 imageURI
               );
-              const shape = this.engine.block.createShape(
-                "//ly.img.ubq/shape/rect"
-              );
-              this.engine.block.setShape(block, shape);
               // console.log("imageURI", imageURI);
             } else {
               // Otherwise, create a rectangle block

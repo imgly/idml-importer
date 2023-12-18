@@ -25,12 +25,12 @@
     "bun-types": "latest",
     "jest-image-snapshot": "^6.2.0",
     "jsdom": "^22.1.0",
-    "@cesdk/node": "^1.18.0",
-    "@cesdk/engine": "^1.18.0"
+    "@cesdk/node": "^1.19.0",
+    "@cesdk/engine": "^1.19.0"
   },
   "peerDependencies": {
     "typescript": "^5.0.0",
-    "@cesdk/engine": "^1.18.0"
+    "@cesdk/engine": "^1.19.0"
   },
   "files": [
     "LICENSE.md",

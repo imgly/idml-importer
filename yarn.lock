@@ -2,15 +2,15 @@
 # yarn lockfile v1
 
 
-"@cesdk/engine@^1.18.0":
-  version "1.18.0"
-  resolved "https://registry.yarnpkg.com/@cesdk/engine/-/engine-1.18.0.tgz#1f1e05a25fc10eb27b7f1f1f7e27694b0a64abc2"
-  integrity sha512-1/pxVgoL+KSCYxsCB/3jk3e2SySJv8dGM78/yAXkCXYPuRedfkUiYJVGnj8ey0nfMXGW8+OKKWUc/HZNncczew==
+"@cesdk/engine@^1.19.0":
+  version "1.19.0"
+  resolved "https://registry.yarnpkg.com/@cesdk/engine/-/engine-1.19.0.tgz#10c26207701bdfbd7bea44551025c6826ae5928d"
+  integrity sha512-2/q2NmI0SfUtP4PELKwE2miZddxMyCZI0O6FeizRguvNTrn8cTHXZskf820cUGX+jTHclYonBcM/kujOKqw0jw==
 
-"@cesdk/node@^1.18.0":
-  version "1.18.0"
-  resolved "https://registry.yarnpkg.com/@cesdk/node/-/node-1.18.0.tgz#7a68e08f9b8c42da85687ee8aca0bc74e516ae58"
-  integrity sha512-3G7y2/IrHPZQnqEg9RBP7E1EvIJ9IrLmEPQaoajd2zngVcp3j59rGm5JfhYv54YVmTZDcbNvP6vFQPmH90HI5w==
+"@cesdk/node@^1.19.0":
+  version "1.19.0"
+  resolved "https://registry.yarnpkg.com/@cesdk/node/-/node-1.19.0.tgz#edb49da3779e16ca7b8f8daa59ba7ec5523bc3e5"
+  integrity sha512-WRKqPQC7UkZEEGnN8hF3qSzWXX5PpvUPK7txA33QzBHweI5BAQwZzRmbf+pWpf2MwH8sQ3b0RpHoXe6gRgFVhQ==
   optionalDependencies:
     node-fetch cjs
 

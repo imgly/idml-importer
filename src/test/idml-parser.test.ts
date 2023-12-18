@@ -31,7 +31,6 @@ test(
       const engine = await CreativeEngine.init({
         license: process.env.CESDK_LICENSE,
       });
-      engine.editor.setSettingBool("features/unifiedBlocksEnabled", true);
       const parser = await IDMLParser.fromFile(
         engine as any,
         arrayBuffer,

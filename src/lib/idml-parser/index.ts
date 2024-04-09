@@ -307,6 +307,7 @@ export class IDMLParser {
               this.applyFill(block, element);
             }
 
+            this.copyElementName(element, block);
             return block;
           }
 
@@ -343,6 +344,7 @@ export class IDMLParser {
             this.engine.block.setHeight(block, height);
             this.engine.block.setRotation(block, ovalAttributes.rotation);
 
+            this.copyElementName(element, block);
             return block;
           }
 
@@ -396,6 +398,7 @@ export class IDMLParser {
             this.engine.block.setHeight(block, height);
             this.engine.block.setRotation(block, polygonAttributes.rotation);
 
+            this.copyElementName(element, block);
             return block;
           }
 
@@ -453,6 +456,7 @@ export class IDMLParser {
             this.engine.block.setWidth(block, width);
             this.engine.block.setRotation(block, lineAttributes.rotation);
 
+            this.copyElementName(element, block);
             return block;
           }
 
@@ -661,6 +665,7 @@ export class IDMLParser {
               this.applyFill(backgroundBlock, element);
             }
 
+            this.copyElementName(element, block);
             return block;
           }
 
@@ -672,7 +677,9 @@ export class IDMLParser {
               spread,
               pageBlock
             );
-            return this.engine.block.group(children);
+            const block = this.engine.block.group(children);
+            this.copyElementName(element, block);
+            return block;
           }
 
           default:
@@ -681,6 +688,20 @@ export class IDMLParser {
       })
     );
     return blocks.filter((block) => block !== null) as number[];
+  }
+
+  /**
+   * Parses the name of an IDML element and applies it to a CE.SDK block
+   *
+   * @param element The IDML element
+   * @param block The CE.SDK block
+   * @returns void
+   */
+  private copyElementName(element: Element, block: number) {
+    this.engine.block.setName(
+      block,
+      element.getAttribute("Name")?.replace("$ID/", "") ?? ""
+    );
   }
 
   /**

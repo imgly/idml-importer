@@ -109,3 +109,7 @@ async function main() {
 }
 main();
 ```
+
+## License
+
+The software is free for use under the AGPL License.

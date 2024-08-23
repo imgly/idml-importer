@@ -4,6 +4,7 @@ import fs from "fs";
 import glob from "glob";
 import { JSDOM } from "jsdom";
 import { IDMLParser } from "../lib/idml-parser";
+import { addGoogleFontsAssetLibrary } from "../lib/idml-parser/font-resolver";
 const filePaths = glob.sync("./src/test/examples/**/*.idml");
 
 function DOMParser(content: string) {
@@ -31,6 +32,8 @@ test(
       const engine = await CreativeEngine.init({
         license: process.env.CESDK_LICENSE,
       });
+      // @ts-ignore
+      await addGoogleFontsAssetLibrary(engine);
       const parser = await IDMLParser.fromFile(
         engine as any,
         arrayBuffer,

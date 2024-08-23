@@ -1,6 +1,6 @@
 import type CreativeEngine from "@cesdk/engine";
-import { RGBAColor } from "@cesdk/engine";
-import type { Font } from "./font-resolver";
+import type { Font, RGBAColor } from "@cesdk/engine";
+import type { TypefaceResolver } from "./font-resolver";
 import defaultFontResolver from "./font-resolver";
 import { Logger } from "./logger";
 import type { Gradient, IDML } from "./types";
@@ -22,7 +22,7 @@ const DESIGN_UNIT = "Inch";
  * This is used to convert the IDML file's pixel values to CESDK's design unit
  */
 const PIXEL_SCALE_FACTOR = 72;
-const DEFAULT_FONT: Font = { name: "Roboto", style: "Regular" };
+const DEFAULT_FONT_NAME = "Roboto";
 
 // Element types of the spreads in the IDML file
 const SPREAD_ELEMENTS = {
@@ -42,7 +42,7 @@ export class IDMLParser {
   // The IDML file contents
   private idml: IDML;
   // A function that resolves the font URI from the font name and style
-  private fontResolver: (font: Font) => Promise<string | null>;
+  private fontResolver: TypefaceResolver;
   // A map of the colors used in the IDML document and their RGBA values
   private colors: Map<string, RGBAColor>;
   // A map of the gradients used in the IDML document and their GradientColorStop values
@@ -54,7 +54,7 @@ export class IDMLParser {
   private constructor(
     engine: CreativeEngine,
     idml: IDML,
-    fontResolver?: (font: Font) => Promise<string | null>
+    fontResolver?: TypefaceResolver
   ) {
     this.engine = engine;
     this.idml = idml;
@@ -113,7 +113,7 @@ export class IDMLParser {
     engine: CreativeEngine,
     file: Blob | File | ArrayBuffer,
     DOMParser: any,
-    fontResolver?: (font: Font) => Promise<string | null>
+    fontResolver?: TypefaceResolver
   ) {
     const idml = await unzipIdmlFile(file, DOMParser);
     return new IDMLParser(engine, idml, fontResolver);
@@ -247,7 +247,7 @@ export class IDMLParser {
   ): Promise<number[]> {
     // Loop over the page element's children
     const blocks = await Promise.all(
-      Array.from(element.children).map(async (element) => {
+      Array.from(element.children).map(async (element): Promise<number[]> => {
         // Render the CESDK block based on the element type
         switch (element.tagName) {
           case SPREAD_ELEMENTS.RECTANGLE: {
@@ -257,9 +257,6 @@ export class IDMLParser {
               spread
             );
 
-            // Get the image URI if available
-            const imageURI = getImageURI(element, this.logger);
-
             let block: number;
 
             // If the rectangle has an image URI, create an image block
@@ -268,23 +265,9 @@ export class IDMLParser {
               "//ly.img.ubq/shape/rect"
             );
             this.engine.block.setShape(block, shape);
-            if (imageURI) {
-              const fill = this.engine.block.createFill(
-                "//ly.img.ubq/fill/image"
-              );
-              this.engine.block.setFill(block, fill);
-              this.engine.block.setKind(block, "image");
-              this.engine.block.setString(
-                fill,
-                "fill/image/imageFileURI",
-                imageURI
-              );
-              // console.log("imageURI", imageURI);
-            } else {
-              // Otherwise, create a rectangle block
-              this.engine.block.setKind(block, "shape");
-            }
+            this.engine.block.setKind(block, "shape");
 
+            this.applyImageFill(block, element);
             this.applyStroke(block, element);
             this.applyTransparency(block, element);
 
@@ -308,7 +291,7 @@ export class IDMLParser {
             }
 
             this.copyElementName(element, block);
-            return block;
+            return [block];
           }
 
           case SPREAD_ELEMENTS.OVAL: {
@@ -327,6 +310,7 @@ export class IDMLParser {
             this.engine.block.setShape(block, shape);
 
             this.applyFill(block, element);
+            this.applyImageFill(block, element);
             this.applyStroke(block, element);
             this.applyTransparency(block, element);
 
@@ -345,7 +329,7 @@ export class IDMLParser {
             this.engine.block.setRotation(block, ovalAttributes.rotation);
 
             this.copyElementName(element, block);
-            return block;
+            return [block];
           }
 
           case SPREAD_ELEMENTS.POLYGON: {
@@ -381,6 +365,7 @@ export class IDMLParser {
             );
 
             this.applyFill(block, element);
+            this.applyImageFill(block, element);
             this.applyStroke(block, element);
             this.applyTransparency(block, element);
 
@@ -399,7 +384,7 @@ export class IDMLParser {
             this.engine.block.setRotation(block, polygonAttributes.rotation);
 
             this.copyElementName(element, block);
-            return block;
+            return [block];
           }
 
           case SPREAD_ELEMENTS.GRAPHIC_LINE: {
@@ -457,7 +442,7 @@ export class IDMLParser {
             this.engine.block.setRotation(block, lineAttributes.rotation);
 
             this.copyElementName(element, block);
-            return block;
+            return [block];
           }
 
           case SPREAD_ELEMENTS.TEXT_FRAME: {
@@ -506,7 +491,15 @@ export class IDMLParser {
             this.engine.block.setString(block, "text/text", content);
 
             // the default font
-            let font = DEFAULT_FONT;
+            let font: {
+              family: string;
+              style: Font["style"];
+              weight: Font["weight"];
+            } = {
+              family: DEFAULT_FONT_NAME,
+              style: "normal",
+              weight: "normal",
+            };
 
             // keep track of the text length to apply the styles to the correct text segment
             let length = 0;
@@ -552,16 +545,29 @@ export class IDMLParser {
               // get the text segment font family and style
               const fontFamily =
                 range.querySelector("AppliedFont")?.innerHTML ?? "Roboto";
-              const fontStyle = range.getAttribute("FontStyle") ?? "Regular";
+              const fontStyle =
+                (range.getAttribute("FontStyle") as Font["weight"]) ?? "normal";
 
-              font = { name: fontFamily, style: fontStyle };
+              font = { family: fontFamily, style: "normal", weight: fontStyle };
 
               length += range.querySelector("Content")?.innerHTML.length ?? 0;
             });
 
             // get the font URI from the font resolver
-            const fontURI = await this.fontResolver(font);
-            if (fontURI) {
+            const typefaceResponse = await this.fontResolver(font, this.engine);
+
+            if (!typefaceResponse) {
+              console.log(
+                `Could not find typeface for font ${JSON.stringify(font)}`
+              );
+              this.logger.log(
+                `Could not find typeface for font ${font.family}`,
+                "warning"
+              );
+            }
+
+            if (typefaceResponse) {
+              const fontURI = typefaceResponse.font.uri;
               // Test if the font is loadable by creating a FontFace
               // If the font is loadable, we set the font URI on the text block
               // This was necessary because the CESDK will not render the text
@@ -572,7 +578,11 @@ export class IDMLParser {
                 if (!res.ok) {
                   throw new Error(`Error loading font at ${fontURI}`);
                 }
-                this.engine.block.setString(block, "text/fontFileUri", fontURI);
+                this.engine.block.setFont(
+                  block,
+                  fontURI,
+                  typefaceResponse.typeface
+                );
               } catch (error) {
                 console.error(
                   "Could not load font at ",
@@ -636,9 +646,11 @@ export class IDMLParser {
             this.engine.block.setWidth(block, width);
             this.engine.block.setHeight(block, height);
             this.engine.block.setRotation(block, textFrameAttributes.rotation);
+
+            let backgroundBlock: number | null = null;
             // If the text frame has a fill color, we create a rectangle block to use as the background
             if (element.getAttribute("FillColor")) {
-              const backgroundBlock = this.engine.block.create(
+              backgroundBlock = this.engine.block.create(
                 "//ly.img.ubq/graphic"
               );
               this.engine.block.setKind(backgroundBlock, "shape");
@@ -647,13 +659,7 @@ export class IDMLParser {
               );
               this.engine.block.setShape(backgroundBlock, shape);
 
-              const positionBeforeTextBlock =
-                this.engine.block.getChildren(pageBlock).length - 2;
-              this.engine.block.insertChild(
-                pageBlock,
-                backgroundBlock,
-                positionBeforeTextBlock
-              );
+              this.engine.block.appendChild(pageBlock, backgroundBlock);
               this.engine.block.setPositionX(backgroundBlock, x);
               this.engine.block.setPositionY(backgroundBlock, y);
               this.engine.block.setWidth(backgroundBlock, width);
@@ -664,9 +670,10 @@ export class IDMLParser {
               );
               this.applyFill(backgroundBlock, element);
             }
+            this.engine.block.appendChild(pageBlock, block);
 
             this.copyElementName(element, block);
-            return block;
+            return backgroundBlock ? [block, backgroundBlock] : [block];
           }
 
           case SPREAD_ELEMENTS.GROUP: {
@@ -678,16 +685,26 @@ export class IDMLParser {
               pageBlock
             );
             const block = this.engine.block.group(children);
+            // reordering the blocks to the correct order
+            children.forEach((child, index) => {
+              this.engine.block.insertChild(block, child, index);
+            });
             this.copyElementName(element, block);
-            return block;
+            return [block];
           }
 
           default:
-            return null;
+            return [];
         }
       })
     );
-    return blocks.filter((block) => block !== null) as number[];
+    // reorder the blocks into the correct order
+    blocks.flat().forEach((block, index) => {
+      if (index > 0) {
+        this.engine.block.insertChild(pageBlock, block, index);
+      }
+    });
+    return blocks.flat();
   }
 
   /**
@@ -782,9 +799,11 @@ export class IDMLParser {
       }
       this.engine.block.setFill(block, gradientFill);
     } else {
-      this.engine.block.setFillEnabled(block, false);
       if (fillColor !== "Swatch/None") {
-        console.log(`Fill color ${fillColor} not found in document colors.`);
+        this.logger.log(
+          `Fill color ${fillColor} not found in document colors.`,
+          "error"
+        );
       }
     }
   }
@@ -860,5 +879,21 @@ export class IDMLParser {
         ?.getAttribute("Opacity") ?? "100"
     );
     this.engine.block.setOpacity(block, opacity / 100);
+  }
+
+  /**
+   * Parses the image fill of an IDML element and applies it to a CESDK block
+   * @param block The CESDK block to apply the image fill to
+   * @param element The IDML element
+   * @returns void
+   */
+  private applyImageFill(block: number, element: Element) {
+    const imageURI = getImageURI(element, this.logger);
+    if (imageURI) {
+      const fill = this.engine.block.createFill("image");
+      this.engine.block.setString(fill, "fill/image/imageFileURI", imageURI);
+      this.engine.block.setFill(block, fill);
+      this.engine.block.setKind(block, "image");
+    }
   }
 }

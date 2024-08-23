@@ -1,64 +1,53 @@
 // @ts-ignore
 import { version } from "../../../package.json";
+import CreativeEngine, { AssetDefinition, Font, Typeface } from "@cesdk/engine";
 
-type FontVariants = Item["files"];
-
-export interface GoogleFonts {
-  kind: string;
-  items: Item[];
-}
-
-export interface Item {
+export interface TypefaceParams {
   family: string;
-  variants: string[];
-  subsets: string[];
-  version: string;
-  lastModified: string;
-  files: Files;
-  category: string;
-  kind: string;
+  style: Font["style"];
+  weight: Font["weight"];
 }
+export type TypefaceResolver = (
+  fontParameters: TypefaceParams,
+  engine: CreativeEngine
+) => Promise<FontResolverResult | null>;
 
-export interface Files {
-  "100"?: string;
-  "100italic"?: string;
-  "300"?: string;
-  "300italic"?: string;
-  regular?: string;
-  italic?: string;
-  "500"?: string;
-  "500italic"?: string;
-  "700"?: string;
-  "700italic"?: string;
-  "900"?: string;
-  "900italic"?: string;
-  "600"?: string;
-  "800"?: string;
-  "600italic"?: string;
-  "800italic"?: string;
-  "200"?: string;
-  "200italic"?: string;
+export async function addGoogleFontsAssetLibrary(
+  engine: CreativeEngine
+): Promise<boolean | void> {
+  if (engine.asset.findAllSources().includes("ly.img.google-fonts")) {
+    return;
+  }
+  engine.asset.addLocalSource("ly.img.google-fonts");
+  const contentJSON = await fetchGoogleFonts();
+  contentJSON.assets.forEach((asset) => {
+    engine.asset.addAssetToSource("ly.img.google-fonts", asset);
+  });
 }
-
-export type Font = { name: string; style: string };
+interface FontResolverResult {
+  typeface: Typeface;
+  font: Font;
+}
 
 function buildUnpkgAssetPath(assetPath: string) {
   return `https://unpkg.com/@imgly/idml-importer@${version}/dist/assets/${assetPath}`;
 }
-async function fetchGoogleFonts(): Promise<GoogleFonts> {
-  return fetch(buildUnpkgAssetPath("google-fonts.json")).then((res) =>
+
+export type ContentJSON = {
+  version: string;
+  id: string;
+  assets: AssetDefinition[];
+};
+
+async function fetchGoogleFonts(): Promise<ContentJSON> {
+  return fetch(buildUnpkgAssetPath("google-fonts/content.json")).then((res) =>
     res.json()
   );
 }
 
-let googleFonts: GoogleFonts | null = null;
-async function getGoogleFonts() {
-  if (!googleFonts) {
-    googleFonts = await fetchGoogleFonts();
-  }
-  return googleFonts;
-}
+let assetsPromise: Promise<ContentJSON>;
 
+const defaultTypefaceLibrary = "ly.img.google-fonts";
 /**
  * The default font resolver for the IDML parser.
  * This will try to find a matching google font variant for the given font.
@@ -66,33 +55,95 @@ async function getGoogleFonts() {
  * @param font The font to resolve
  * @returns The font URI or null if no matching font was found
  */
-export default async function fontResolver({ name, style }: Font) {
-  const fontVariant = fontVariantMap.get(style);
-  if (!fontVariant) return null;
-  const fonts = await getGoogleFonts();
-  const font = fonts.items.find((font) => font.family === name);
-  const fontURI = font?.files[fontVariant as keyof FontVariants];
-  return fontURI ?? null;
+export default async function fontResolver(
+  fontParameters: TypefaceParams,
+  engine: CreativeEngine
+): Promise<FontResolverResult | null> {
+  if (!engine.asset.findAllSources().includes(defaultTypefaceLibrary)) {
+    throw new Error(
+      `The default typeface library ${defaultTypefaceLibrary} is not available.`
+    );
+  }
+  if (fontParameters.family in TYPEFACE_ALIAS_MAP) {
+    fontParameters.family = TYPEFACE_ALIAS_MAP[fontParameters.family];
+  }
+
+  const typefaceQuery = await engine.asset.findAssets(defaultTypefaceLibrary, {
+    page: 0,
+    query: fontParameters.family,
+    perPage: 1,
+  });
+  if (!typefaceQuery || typefaceQuery.assets.length === 0) {
+    return null;
+  }
+  const typeface = typefaceQuery.assets[0].payload?.typeface;
+  if (!typeface) {
+    throw new Error(`No typeface found for font ${fontParameters.family}`);
+  }
+  const font = typeface.fonts.find((font) => {
+    if (
+      fontParameters.style === undefined ||
+      (font.style?.toLowerCase() === fontParameters.style.toLowerCase() &&
+        (fontParameters.weight === undefined ||
+          isEqualWeight(fontParameters.weight, font.weight)))
+    ) {
+      return true;
+    }
+
+    return false;
+  });
+  if (!font) {
+    return null;
+  }
+  return {
+    typeface,
+    font,
+  };
 }
 
-// Map of font styles to google font variants
-const fontVariantMap = new Map([
-  ["Thin", "100"],
-  ["Thin Italic", "100italic"],
-  ["Extra-light", "200"],
-  ["Extra-light Italic", "200italic"],
-  ["Light", "300"],
-  ["Light Italic", "300italic"],
-  ["Regular", "regular"],
-  ["Regular Italic", "italic"],
-  ["Medium", "500"],
-  ["Medium Italic", "500italic"],
-  ["Semi-bold", "600"],
-  ["Semi-bold Italic", "600italic"],
-  ["Bold", "700"],
-  ["Bold Italic", "700italic"],
-  ["Extra-bold", "800"],
-  ["Extra-bold Italic", "800italic"],
-  ["Black", "900"],
-  ["Black Italic", "900italic"],
-]);
+const WEIGHTS: Font["weight"][] = [
+  "thin",
+  "extraLight",
+  "light",
+  "normal",
+  "medium",
+  "semiBold",
+  "bold",
+  "extraBold",
+  "heavy",
+];
+
+const WEIGHT_ALIAS_MAP: Record<string, Font["weight"]> = {
+  "100": "thin",
+  "200": "extraLight",
+  "300": "light",
+  regular: "normal",
+  "400": "normal",
+  "500": "medium",
+  "600": "semiBold",
+  "700": "bold",
+  "800": "extraBold",
+  "900": "heavy",
+};
+
+const TYPEFACE_ALIAS_MAP: Record<string, string> = {
+  Helvetica: "Roboto",
+  "Times New Roman": "Tinos",
+  Arial: "Arimo",
+  Georgia: "Tinos",
+  Garamond: "EB Garamond",
+  Futura: "Raleway",
+  "Comic Sans MS": "Comic Neue",
+};
+
+function isEqualWeight(weightString: string, fontWeight: Font["weight"]) {
+  const lowerCaseWeightString = weightString.toLowerCase();
+  if (lowerCaseWeightString === fontWeight) {
+    return true;
+  }
+  const weightAlias = WEIGHT_ALIAS_MAP[lowerCaseWeightString];
+  if (weightAlias !== undefined) {
+    return true;
+  }
+  return false;
+}

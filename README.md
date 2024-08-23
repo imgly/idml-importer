@@ -39,7 +39,7 @@ yarn add @imgly/idml-importer
 
 ```js
 import CreativeEngine from "@cesdk/engine";
-import { IDMLParser } from "@imgly/idml-importer";
+import { IDMLParser, addGoogleFontsAssetLibrary } from "@imgly/idml-importer";
 
 const blob = await fetch(
   "https://img.ly/showcases/cesdk/cases/indesign-template-import/socialmedia.idml"
@@ -47,6 +47,8 @@ const blob = await fetch(
 const engine = await CreativeEngine.init({
   license: "YOUR_LICENSE",
 });
+// We use google fonts to replace well known fonts in the default font resolver.
+await addGoogleFontsAssetLibrary(engine);
 const parser = await IDMLParser.fromFile(engine, blob, (content) =>
   new DOMParser().parseFromString(content, "text/xml")
 );

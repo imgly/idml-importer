@@ -248,6 +248,8 @@ export class IDMLParser {
     // Loop over the page element's children
     const blocks = await Promise.all(
       Array.from(element.children).map(async (element): Promise<number[]> => {
+        const visible = element.getAttribute("Visible") === "true";
+        if (!visible) return [];
         // Render the CESDK block based on the element type
         switch (element.tagName) {
           case SPREAD_ELEMENTS.RECTANGLE: {

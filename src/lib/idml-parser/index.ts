@@ -452,6 +452,18 @@ export class IDMLParser {
             const parentStoryId = element.getAttribute("ParentStory");
             const parentStory = this.idml[`Stories/Story_${parentStoryId}.xml`];
 
+            // Log out a warning if a story (text) has multiple text frames.
+            // The CE.SDK does not support overflowing text between multiple text frames.
+            const hasOtherFrames =
+              element.getAttribute("PreviousTextFrame") !== "n" ||
+              element.getAttribute("NextTextFrame") !== "n";
+
+            if (hasOtherFrames) {
+              this.logger.log(
+                `Story with ID ${parentStoryId} has multiple text frames. This is currently not supported and might lead to text duplication.`,
+                "warning"
+              );
+            }
             // Create a text block
             const block = this.engine.block.create("//ly.img.ubq/text");
 

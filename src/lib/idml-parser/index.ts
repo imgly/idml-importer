@@ -505,8 +505,20 @@ export class IDMLParser {
             let length = 0;
             // apply the text styles for each text segment
             characterStyleRange.forEach((range) => {
+              const parentParagraphStyle = range.parentElement;
+              const appliedParagraphStyleId =
+                parentParagraphStyle?.getAttribute("AppliedParagraphStyle");
+              const appliedParagraphStyle = this.idml[
+                "Resources/Styles.xml"
+              ].querySelector(
+                `ParagraphStyle[Self="${appliedParagraphStyleId}"]`
+              )!;
+
               // get the text segment color
-              const color = range.getAttribute("FillColor")!;
+              const color =
+                range.getAttribute("FillColor") ??
+                appliedParagraphStyle.getAttribute("FillColor") ??
+                "Black";
               const rgba = this.colors.get(color);
 
               if (rgba) {
@@ -519,7 +531,9 @@ export class IDMLParser {
               }
 
               // get the text segment font size
-              const fontSize = range.getAttribute("PointSize");
+              const fontSize =
+                range.getAttribute("PointSize") ??
+                appliedParagraphStyle.getAttribute("PointSize");
 
               if (fontSize) {
                 this.engine.block.setFloat(
@@ -530,7 +544,9 @@ export class IDMLParser {
               }
 
               // get the text segment case
-              const capitalization = range.getAttribute("Capitalization")!;
+              const capitalization =
+                range.getAttribute("Capitalization") ??
+                appliedParagraphStyle.getAttribute("Capitalization");
               switch (capitalization) {
                 case "AllCaps":
                   this.engine.block.setTextCase(
@@ -544,9 +560,15 @@ export class IDMLParser {
 
               // get the text segment font family and style
               const fontFamily =
-                range.querySelector("AppliedFont")?.innerHTML ?? "Roboto";
+                range.querySelector("AppliedFont")?.innerHTML ??
+                appliedParagraphStyle.querySelector("AppliedFont")?.innerHTML ??
+                "Roboto";
               const fontStyle =
-                (range.getAttribute("FontStyle") as Font["weight"]) ?? "normal";
+                (range.getAttribute("FontStyle") as Font["weight"]) ??
+                (appliedParagraphStyle.getAttribute(
+                  "FontStyle"
+                ) as Font["weight"]) ??
+                "normal";
 
               font = { family: fontFamily, style: "normal", weight: fontStyle };
 
@@ -593,10 +615,25 @@ export class IDMLParser {
               }
             }
 
-            // get the text alignment
-            const justification = parentStory
-              .querySelector("ParagraphStyleRange")
-              ?.getAttribute("Justification");
+            // If the story contains a paragraph style range, we also read the paragraph style text alignment
+            // Example XML:
+            // <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/SomeID">
+            // <CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]">
+            const firstParagraphStyle = parentStory.querySelector(
+              "ParagraphStyleRange"
+            );
+            const appliedParagraphStyleId = firstParagraphStyle?.getAttribute(
+              "AppliedParagraphStyle"
+            );
+            const appliedParagraphStyle = this.idml[
+              "Resources/Styles.xml"
+            ].querySelector(
+              `ParagraphStyle[Self="${appliedParagraphStyleId}"]`
+            )!;
+
+            const justification =
+              firstParagraphStyle?.getAttribute("Justification") ??
+              appliedParagraphStyle?.getAttribute("Justification");
 
             // set the text alignment
             switch (justification) {

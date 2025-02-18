@@ -506,116 +506,108 @@ export class IDMLParser {
             // keep track of the text length to apply the styles to the correct text segment
             let length = 0;
             // apply the text styles for each text segment
-            characterStyleRange.forEach((range) => {
-              const parentParagraphStyle = range.parentElement;
-              const appliedParagraphStyleId =
-                parentParagraphStyle?.getAttribute("AppliedParagraphStyle");
-              const appliedParagraphStyle = this.idml[
-                "Resources/Styles.xml"
-              ].querySelector(
-                `ParagraphStyle[Self="${appliedParagraphStyleId}"]`
-              )!;
+            const applyTextRunPromises = [...characterStyleRange].map(
+              async (range) => {
+                const parentParagraphStyle = range.parentElement;
+                const appliedParagraphStyleId =
+                  parentParagraphStyle?.getAttribute("AppliedParagraphStyle");
+                const appliedParagraphStyle = this.idml[
+                  "Resources/Styles.xml"
+                ].querySelector(
+                  `ParagraphStyle[Self="${appliedParagraphStyleId}"]`
+                )!;
 
-              // get the text segment color
-              const color =
-                range.getAttribute("FillColor") ??
-                appliedParagraphStyle.getAttribute("FillColor") ??
-                "Black";
-              const rgba = this.colors.get(color);
+                // get the text segment color
+                const color =
+                  range.getAttribute("FillColor") ??
+                  appliedParagraphStyle.getAttribute("FillColor") ??
+                  "Black";
+                const rgba = this.colors.get(color);
+                const start = length;
+                const end = length + content.length;
 
-              if (rgba) {
-                this.engine.block.setTextColor(
-                  block,
-                  rgba,
-                  length,
-                  length + content.length
-                );
-              }
-
-              // get the text segment font size
-              const fontSize =
-                range.getAttribute("PointSize") ??
-                appliedParagraphStyle.getAttribute("PointSize");
-
-              if (fontSize) {
-                this.engine.block.setFloat(
-                  block,
-                  "text/fontSize",
-                  parseFloat(fontSize)
-                );
-              }
-
-              // get the text segment case
-              const capitalization =
-                range.getAttribute("Capitalization") ??
-                appliedParagraphStyle.getAttribute("Capitalization");
-              switch (capitalization) {
-                case "AllCaps":
-                  this.engine.block.setTextCase(
-                    block,
-                    "Uppercase",
-                    length,
-                    length + content.length
-                  );
-                  break;
-              }
-
-              // get the text segment font family and style
-              const fontFamily =
-                range.querySelector("AppliedFont")?.innerHTML ??
-                appliedParagraphStyle.querySelector("AppliedFont")?.innerHTML ??
-                "Roboto";
-              const fontStyle =
-                (range.getAttribute("FontStyle") as Font["weight"]) ??
-                (appliedParagraphStyle.getAttribute(
-                  "FontStyle"
-                ) as Font["weight"]) ??
-                "normal";
-
-              font = { family: fontFamily, style: "normal", weight: fontStyle };
-
-              length += range.querySelector("Content")?.innerHTML.length ?? 0;
-            });
-
-            // get the font URI from the font resolver
-            const typefaceResponse = await this.fontResolver(font, this.engine);
-
-            if (!typefaceResponse) {
-              console.log(
-                `Could not find typeface for font ${JSON.stringify(font)}`
-              );
-              this.logger.log(
-                `Could not find typeface for font ${font.family}`,
-                "warning"
-              );
-            }
-
-            if (typefaceResponse) {
-              const fontURI = typefaceResponse.font.uri;
-              // Test if the font is loadable by creating a FontFace
-              // If the font is loadable, we set the font URI on the text block
-              // This was necessary because the CESDK will not render the text
-              // if loading the font errors out
-              try {
-                // use fetch to see if the font is loadable
-                const res = await fetch(fontURI);
-                if (!res.ok) {
-                  throw new Error(`Error loading font at ${fontURI}`);
+                if (rgba) {
+                  this.engine.block.setTextColor(block, rgba, start, end);
                 }
-                this.engine.block.setFont(
-                  block,
-                  fontURI,
-                  typefaceResponse.typeface
+
+                // get the text segment font size
+                const fontSize =
+                  range.getAttribute("PointSize") ??
+                  appliedParagraphStyle.getAttribute("PointSize");
+
+                if (fontSize) {
+                  this.engine.block.setTextFontSize(
+                    block,
+                    parseFloat(fontSize),
+                    start,
+                    end
+                  );
+                }
+
+                // get the text segment case
+                const capitalization =
+                  range.getAttribute("Capitalization") ??
+                  appliedParagraphStyle.getAttribute("Capitalization");
+                switch (capitalization) {
+                  case "AllCaps":
+                    this.engine.block.setTextCase(
+                      block,
+                      "Uppercase",
+                      start,
+                      end
+                    );
+                    break;
+                }
+
+                // get the text segment font family and style
+                const fontFamily =
+                  range.querySelector("AppliedFont")?.innerHTML ??
+                  appliedParagraphStyle.querySelector("AppliedFont")
+                    ?.innerHTML ??
+                  "Roboto";
+                const fontStyle =
+                  (range
+                    .getAttribute("FontStyle")
+                    ?.toLowerCase() as Font["weight"]) ??
+                  (appliedParagraphStyle
+                    .getAttribute("FontStyle")
+                    ?.toLowerCase() as Font["weight"]) ??
+                  "normal";
+
+                font = {
+                  family: fontFamily,
+                  style: "normal",
+                  weight: fontStyle,
+                };
+
+                length += range.querySelector("Content")?.innerHTML.length ?? 0;
+
+                // get the font URI from the font resolver
+                const typefaceResponse = await this.fontResolver(
+                  font,
+                  this.engine
                 );
-              } catch (error) {
-                console.error(
-                  "Could not load font at ",
-                  fontURI,
-                  "due to: ",
-                  error
+
+                if (!typefaceResponse) {
+                  console.log(
+                    `Could not find typeface for font ${JSON.stringify(font)}`
+                  );
+                  this.logger.log(
+                    `Could not find typeface for font ${font.family}`,
+                    "warning"
+                  );
+                  return;
+                }
+                this.engine.block.setTypeface(
+                  block,
+                  typefaceResponse.typeface,
+                  start,
+                  end
                 );
               }
-            }
+            );
+
+            await Promise.all(applyTextRunPromises);
 
             // If the story contains a paragraph style range, we also read the paragraph style text alignment
             // Example XML:

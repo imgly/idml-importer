@@ -290,6 +290,7 @@ export class IDMLParser {
             if (this.engine.block.getKind(block) === "shape") {
               // Fill needs to be applied after setting height and width, because gradient fills need the dimensions
               this.applyFill(block, element);
+              this.applyBorderRadius(block, element);
             }
 
             this.copyElementName(element, block);
@@ -967,5 +968,46 @@ export class IDMLParser {
         }
       }
     }
+  }
+
+  /**
+   * Parses the corner radius of an IDML element and applies it to a CESDK block
+   * @param block The CESDK block to apply the corner radius to
+   * @param element The IDML element
+   * @returns void
+   */
+  private applyBorderRadius(block: number, element: Element) {
+    // Maps the IDML corner attributes to the corresponding CESDK corner attributes
+    const cornerAttributeMap = {
+      TopLeft: "TL",
+      TopRight: "TR",
+      BottomLeft: "BL",
+      BottomRight: "BR",
+    };
+
+    const shape = this.engine.block.getShape(block);
+    const shapeType = this.engine.block.getType(shape);
+    if (!shape || shapeType !== "//ly.img.ubq/shape/rect") {
+      this.logger.log(
+        "Border radius currently can only be applied to rectangle shapes.",
+        "warning"
+      );
+      return;
+    }
+
+    Object.entries(cornerAttributeMap).forEach(([idmlName, cesdkName]) => {
+      if (!element.getAttribute(`${idmlName}CornerOption`)) return;
+
+      const radius =
+        parseFloat(element.getAttribute(`${idmlName}CornerRadius`) ?? "0") /
+        PIXEL_SCALE_FACTOR;
+      if (radius === 0) return;
+
+      this.engine.block.setFloat(
+        shape,
+        `shape/rect/cornerRadius${cesdkName}`,
+        radius
+      );
+    });
   }
 }

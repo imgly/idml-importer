@@ -278,6 +278,15 @@ export function getImageURI(element: Element, logger: Logger) {
   // Get the image element
   const image = element.querySelector("Image") ?? element.querySelector("SVG");
 
+  // Check if there is a PDF element, if so log out a warning and return a placeholder image
+  if (!image && element.querySelector("PDF")) {
+    logger.log(
+      "An element contained PDF data, which is not supported yet. The element will be replaced with a placeholder image.",
+      "warning"
+    );
+    return "https://img.ly/static/cesdk/placeholder_image.svg";
+  }
+
   if (!image) return null;
 
   const contentElement = image.querySelector("Contents")!;

@@ -528,12 +528,12 @@ export class IDMLParser {
                   "Resources/Styles.xml"
                 ].querySelector(
                   `ParagraphStyle[Self="${appliedParagraphStyleId}"]`
-                )!;
+                );
 
                 // get the text segment color
                 const color =
                   range.getAttribute("FillColor") ??
-                  appliedParagraphStyle.getAttribute("FillColor") ??
+                  appliedParagraphStyle?.getAttribute("FillColor") ??
                   "Black";
                 const rgba = this.colors.get(color);
                 const start = length;
@@ -546,7 +546,7 @@ export class IDMLParser {
                 // get the text segment font size
                 const fontSize =
                   range.getAttribute("PointSize") ??
-                  appliedParagraphStyle.getAttribute("PointSize");
+                  appliedParagraphStyle?.getAttribute("PointSize");
 
                 if (fontSize) {
                   this.engine.block.setTextFontSize(
@@ -560,7 +560,7 @@ export class IDMLParser {
                 // get the text segment case
                 const capitalization =
                   range.getAttribute("Capitalization") ??
-                  appliedParagraphStyle.getAttribute("Capitalization");
+                  appliedParagraphStyle?.getAttribute("Capitalization");
                 switch (capitalization) {
                   case "AllCaps":
                     this.engine.block.setTextCase(
@@ -575,7 +575,7 @@ export class IDMLParser {
                 // get the text segment font family and style
                 const fontFamily =
                   range.querySelector("AppliedFont")?.innerHTML ??
-                  appliedParagraphStyle.querySelector("AppliedFont")
+                  appliedParagraphStyle?.querySelector("AppliedFont")
                     ?.innerHTML ??
                   "Roboto";
                 const fontStyle =
@@ -583,7 +583,7 @@ export class IDMLParser {
                     .getAttribute("FontStyle")
                     ?.toLowerCase() as Font["weight"]) ??
                   (appliedParagraphStyle
-                    .getAttribute("FontStyle")
+                    ?.getAttribute("FontStyle")
                     ?.toLowerCase() as Font["weight"]) ??
                   "normal";
 

@@ -85,8 +85,8 @@ test(
         }
       });
 
-      const sceneString = await engine.scene.saveToString();
-      await Bun.write(`${outputFolderPath}/design.scene`, sceneString);
+      const sceneString = await engine.scene.saveToArchive();
+      await Bun.write(`${outputFolderPath}/design.zip`, sceneString);
       engine.dispose();
     };
 

@@ -79,11 +79,15 @@ function parseTransformMatrix(transform: number[]) {
   // The rotation is calculated by taking the arctangent of the second row.
   // This provides the rotation in radians. The added 2*PI is to ensure a positive angle.
   const rotation = Math.atan2(b, a) + 2 * Math.PI;
+  const scaleX = Math.sqrt(a * a + b * b);
+  const scaleY = Math.sqrt(c * c + d * d);
 
   return {
     x,
     y,
     rotation,
+    scaleX,
+    scaleY,
   };
 }
 
@@ -262,10 +266,14 @@ export function getTransformAndShapeProperties(
   // after rotation has been applied.
   const x = elementX + centerX - shapeGeometry.centerX - pageGeometricBounds[1];
   const y = elementY + centerY - shapeGeometry.centerY - pageGeometricBounds[0];
+  const width = shapeGeometry.width * elementTransform.scaleX;
+  const height = shapeGeometry.height * elementTransform.scaleY;
 
   return {
     ...shapeGeometry,
     ...elementTransform,
+    width,
+    height,
     x,
     y,
   };

@@ -11,6 +11,7 @@ import {
   getImageURI,
   getPageAttributes,
   getTransformAndShapeProperties,
+  parseFontStyleString,
   replaceSpecialCharacters,
   unzipIdmlFile,
 } from "./utils";
@@ -472,25 +473,23 @@ export class IDMLParser {
               "CharacterStyleRange"
             );
 
+            const getContentFromCharacterStyleRange = (range: Element) => {
+              let rangeContent = "";
+              Array.from(range.children).forEach((child) => {
+                switch (child.tagName) {
+                  case "Content":
+                    rangeContent += replaceSpecialCharacters(child.innerHTML);
+                    break;
+                  case "Br":
+                    rangeContent += "\r\n";
+                    break;
+                }
+              });
+              return rangeContent;
+            };
             // extract the text content from the CharacterStyleRange elements
             const content = Array.from(characterStyleRange)
-              .map((range) => {
-                let rangeContent = "";
-                Array.from(range.children).forEach((child) => {
-                  switch (child.tagName) {
-                    // If the child is a content tag, we append the content to the range content
-                    case "Content":
-                      rangeContent += replaceSpecialCharacters(child.innerHTML);
-                      break;
-
-                    // If the child is a Br tag, we append a new line to the range content
-                    case "Br":
-                      rangeContent += "\n";
-                      break;
-                  }
-                });
-                return rangeContent;
-              })
+              .map(getContentFromCharacterStyleRange)
               .join("");
 
             // Disable text clipping outside of the text frame
@@ -516,11 +515,24 @@ export class IDMLParser {
               weight: "normal",
             };
 
-            // keep track of the text length to apply the styles to the correct text segment
             let length = 0;
+            const characterStyleRangeWithInterval = [...characterStyleRange]
+              .map((range) => {
+                const content = getContentFromCharacterStyleRange(range);
+                const start = length;
+                length += content.length;
+                return {
+                  range,
+                  content,
+                  start,
+                  end: length,
+                };
+              })
+              .filter(({ start, end }) => end > start);
+
             // apply the text styles for each text segment
-            const applyTextRunPromises = [...characterStyleRange].map(
-              async (range) => {
+            const applyTextRunPromises = characterStyleRangeWithInterval.map(
+              async ({ range, start, end }) => {
                 const parentParagraphStyle = range.parentElement;
                 const appliedParagraphStyleId =
                   parentParagraphStyle?.getAttribute("AppliedParagraphStyle");
@@ -529,15 +541,22 @@ export class IDMLParser {
                 ].querySelector(
                   `ParagraphStyle[Self="${appliedParagraphStyleId}"]`
                 );
+                const appliedCharacterStyleId = range.getAttribute(
+                  "AppliedCharacterStyle"
+                );
+                const appliedCharacterStyle = this.idml[
+                  "Resources/Styles.xml"
+                ].querySelector(
+                  `CharacterStyle[Self="${appliedCharacterStyleId}"]`
+                );
+                const getAttribute = (attribute: string) =>
+                  range.getAttribute(attribute) ??
+                  appliedCharacterStyle?.getAttribute(attribute) ??
+                  appliedParagraphStyle?.getAttribute(attribute);
 
                 // get the text segment color
-                const color =
-                  range.getAttribute("FillColor") ??
-                  appliedParagraphStyle?.getAttribute("FillColor") ??
-                  "Black";
+                const color = getAttribute("FillColor") ?? "Black";
                 const rgba = this.colors.get(color);
-                const start = length;
-                const end = length + content.length;
 
                 if (rgba) {
                   this.engine.block.setTextColor(block, rgba, start, end);
@@ -578,22 +597,16 @@ export class IDMLParser {
                   appliedParagraphStyle?.querySelector("AppliedFont")
                     ?.innerHTML ??
                   "Roboto";
-                const fontStyle =
-                  (range
-                    .getAttribute("FontStyle")
-                    ?.toLowerCase() as Font["weight"]) ??
-                  (appliedParagraphStyle
-                    ?.getAttribute("FontStyle")
-                    ?.toLowerCase() as Font["weight"]) ??
-                  "normal";
-
+                const { style, weight } = parseFontStyleString(
+                  range.getAttribute("FontStyle") ??
+                    appliedParagraphStyle?.getAttribute("FontStyle") ??
+                    ""
+                );
                 font = {
                   family: fontFamily,
-                  style: "normal",
-                  weight: fontStyle,
+                  style,
+                  weight,
                 };
-
-                length += range.querySelector("Content")?.innerHTML.length ?? 0;
 
                 // get the font URI from the font resolver
                 const typefaceResponse = await this.fontResolver(
@@ -617,10 +630,12 @@ export class IDMLParser {
                   start,
                   end
                 );
+                this.engine.block.setTextFontStyle(block, style!, start, end);
+                this.engine.block.setTextFontWeight(block, weight!, start, end);
               }
             );
 
-            await Promise.all(applyTextRunPromises);
+            await Promise.allSettled(applyTextRunPromises);
 
             // If the story contains a paragraph style range, we also read the paragraph style text alignment
             // Example XML:

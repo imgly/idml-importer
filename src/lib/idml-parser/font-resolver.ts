@@ -93,28 +93,16 @@ export default async function fontResolver(
 
     return false;
   });
-  if (!font) {
-    return null;
+  if (font) {
+    return {
+      typeface,
+      font,
+    };
   }
-  return {
-    typeface,
-    font,
-  };
+  return null;
 }
 
-const WEIGHTS: Font["weight"][] = [
-  "thin",
-  "extraLight",
-  "light",
-  "normal",
-  "medium",
-  "semiBold",
-  "bold",
-  "extraBold",
-  "heavy",
-];
-
-const WEIGHT_ALIAS_MAP: Record<string, Font["weight"]> = {
+export const WEIGHT_ALIAS_MAP: Record<string, Font["weight"]> = {
   "100": "thin",
   "200": "extraLight",
   "300": "light",
@@ -139,7 +127,7 @@ const TYPEFACE_ALIAS_MAP: Record<string, string> = {
 
 function isEqualWeight(weightString: string, fontWeight: Font["weight"]) {
   const lowerCaseWeightString = weightString.toLowerCase();
-  if (lowerCaseWeightString === fontWeight) {
+  if (lowerCaseWeightString === fontWeight!.toLowerCase()) {
     return true;
   }
   const weightAlias = WEIGHT_ALIAS_MAP[lowerCaseWeightString];

@@ -1,5 +1,11 @@
-import type { GradientColorStop, RGBAColor, CMYKColor } from "@cesdk/engine";
+import type {
+  CMYKColor,
+  Font,
+  GradientColorStop,
+  RGBAColor,
+} from "@cesdk/engine";
 import JSZip from "jszip";
+import { WEIGHT_ALIAS_MAP } from "./font-resolver";
 import { Logger } from "./logger";
 import type { Gradient, IDML, Vector2 } from "./types";
 /**
@@ -565,4 +571,32 @@ export function replaceSpecialCharacters(input: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'");
+}
+
+/**
+ * Parses a FontStyle= attribute value to extract the weight and style
+ * @param fontStyleString The FontStyle= attribute value
+ * @returns The weight and style extracted from the FontStyle= attribute
+ */
+export function parseFontStyleString(fontStyleString: string): {
+  weight: Font["weight"];
+  style: Font["style"];
+} {
+  if (fontStyleString === "") {
+    return { weight: "normal", style: "normal" };
+  }
+  const standardizedFontStyleString = fontStyleString.toLowerCase();
+  const words = standardizedFontStyleString.split(" ");
+  // if any word is "italic" then the style is italic
+  const style = words.some((word) => word.toLowerCase() === "italic")
+    ? "italic"
+    : "normal";
+
+  const weight =
+    Object.entries(WEIGHT_ALIAS_MAP).find(
+      ([key, value]) =>
+        words.includes(key.toLowerCase()) ||
+        words.includes(value?.toLowerCase() ?? "")
+    )?.[1] ?? "normal";
+  return { weight, style };
 }

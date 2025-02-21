@@ -47,7 +47,7 @@ async function fetchGoogleFonts(): Promise<ContentJSON> {
 
 let assetsPromise: Promise<ContentJSON>;
 
-const defaultTypefaceLibrary = "ly.img.google-fonts";
+const typefaceLibrary = "ly.img.google-fonts";
 /**
  * The default font resolver for the IDML parser.
  * This will try to find a matching google font variant for the given font.
@@ -57,18 +57,19 @@ const defaultTypefaceLibrary = "ly.img.google-fonts";
  */
 export default async function fontResolver(
   fontParameters: TypefaceParams,
-  engine: CreativeEngine
+  engine: CreativeEngine,
+  typefaceLibrary = "ly.img.google-fonts"
 ): Promise<FontResolverResult | null> {
-  if (!engine.asset.findAllSources().includes(defaultTypefaceLibrary)) {
+  if (!engine.asset.findAllSources().includes(typefaceLibrary)) {
     throw new Error(
-      `The default typeface library ${defaultTypefaceLibrary} is not available.`
+      `The typeface library ${typefaceLibrary} is not available. Consider adding e.g Google Fonts using addGoogleFontsAssetLibrary.`
     );
   }
   if (fontParameters.family in TYPEFACE_ALIAS_MAP) {
     fontParameters.family = TYPEFACE_ALIAS_MAP[fontParameters.family];
   }
 
-  const typefaceQuery = await engine.asset.findAssets(defaultTypefaceLibrary, {
+  const typefaceQuery = await engine.asset.findAssets(typefaceLibrary, {
     page: 0,
     query: fontParameters.family,
     perPage: 1,

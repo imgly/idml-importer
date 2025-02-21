@@ -28,6 +28,8 @@ test(
       const exists = await blob.exists();
       expect(exists).toEqual(true);
 
+      console.log("Testing and parsing: ", idmlFilePath);
+
       const arrayBuffer = await blob.arrayBuffer();
       const engine = await CreativeEngine.init({
         license: process.env.CESDK_LICENSE,

@@ -11,6 +11,7 @@ import {
   getImageURI,
   getPageAttributes,
   getTransformAndShapeProperties,
+  parseFontStyleString,
   replaceSpecialCharacters,
   unzipIdmlFile,
 } from "./utils";
@@ -248,6 +249,8 @@ export class IDMLParser {
     // Loop over the page element's children
     const blocks = await Promise.all(
       Array.from(element.children).map(async (element): Promise<number[]> => {
+        const visible = element.getAttribute("Visible") === "true";
+        if (!visible) return [];
         // Render the CESDK block based on the element type
         switch (element.tagName) {
           case SPREAD_ELEMENTS.RECTANGLE: {
@@ -288,6 +291,7 @@ export class IDMLParser {
             if (this.engine.block.getKind(block) === "shape") {
               // Fill needs to be applied after setting height and width, because gradient fills need the dimensions
               this.applyFill(block, element);
+              this.applyBorderRadius(block, element);
             }
 
             this.copyElementName(element, block);
@@ -450,6 +454,18 @@ export class IDMLParser {
             const parentStoryId = element.getAttribute("ParentStory");
             const parentStory = this.idml[`Stories/Story_${parentStoryId}.xml`];
 
+            // Log out a warning if a story (text) has multiple text frames.
+            // The CE.SDK does not support overflowing text between multiple text frames.
+            const hasOtherFrames =
+              element.getAttribute("PreviousTextFrame") !== "n" ||
+              element.getAttribute("NextTextFrame") !== "n";
+
+            if (hasOtherFrames) {
+              this.logger.log(
+                `Story with ID ${parentStoryId} has multiple text frames. This is currently not supported and might lead to text duplication.`,
+                "warning"
+              );
+            }
             // Create a text block
             const block = this.engine.block.create("//ly.img.ubq/text");
 
@@ -457,25 +473,23 @@ export class IDMLParser {
               "CharacterStyleRange"
             );
 
+            const getContentFromCharacterStyleRange = (range: Element) => {
+              let rangeContent = "";
+              Array.from(range.children).forEach((child) => {
+                switch (child.tagName) {
+                  case "Content":
+                    rangeContent += replaceSpecialCharacters(child.innerHTML);
+                    break;
+                  case "Br":
+                    rangeContent += "\r\n";
+                    break;
+                }
+              });
+              return rangeContent;
+            };
             // extract the text content from the CharacterStyleRange elements
             const content = Array.from(characterStyleRange)
-              .map((range) => {
-                let rangeContent = "";
-                Array.from(range.children).forEach((child) => {
-                  switch (child.tagName) {
-                    // If the child is a content tag, we append the content to the range content
-                    case "Content":
-                      rangeContent += replaceSpecialCharacters(child.innerHTML);
-                      break;
-
-                    // If the child is a Br tag, we append a new line to the range content
-                    case "Br":
-                      rangeContent += "\n";
-                      break;
-                  }
-                });
-                return rangeContent;
-              })
+              .map(getContentFromCharacterStyleRange)
               .join("");
 
             // Disable text clipping outside of the text frame
@@ -501,102 +515,147 @@ export class IDMLParser {
               weight: "normal",
             };
 
-            // keep track of the text length to apply the styles to the correct text segment
             let length = 0;
+            const characterStyleRangeWithInterval = [...characterStyleRange]
+              .map((range) => {
+                const content = getContentFromCharacterStyleRange(range);
+                const start = length;
+                length += content.length;
+                return {
+                  range,
+                  content,
+                  start,
+                  end: length,
+                };
+              })
+              .filter(({ start, end }) => end > start);
+
             // apply the text styles for each text segment
-            characterStyleRange.forEach((range) => {
-              // get the text segment color
-              const color = range.getAttribute("FillColor")!;
-              const rgba = this.colors.get(color);
-
-              if (rgba) {
-                this.engine.block.setTextColor(
-                  block,
-                  rgba,
-                  length,
-                  length + content.length
+            const applyTextRunPromises = characterStyleRangeWithInterval.map(
+              async ({ range, start, end }) => {
+                const parentParagraphStyle = range.parentElement;
+                const appliedParagraphStyleId =
+                  parentParagraphStyle?.getAttribute("AppliedParagraphStyle");
+                const appliedParagraphStyle = this.idml[
+                  "Resources/Styles.xml"
+                ].querySelector(
+                  `ParagraphStyle[Self="${appliedParagraphStyleId}"]`
                 );
-              }
-
-              // get the text segment font size
-              const fontSize = range.getAttribute("PointSize");
-
-              if (fontSize) {
-                this.engine.block.setFloat(
-                  block,
-                  "text/fontSize",
-                  parseFloat(fontSize)
+                const appliedCharacterStyleId = range.getAttribute(
+                  "AppliedCharacterStyle"
                 );
-              }
+                const appliedCharacterStyle = this.idml[
+                  "Resources/Styles.xml"
+                ].querySelector(
+                  `CharacterStyle[Self="${appliedCharacterStyleId}"]`
+                );
+                const getAttribute = (attribute: string) =>
+                  range.getAttribute(attribute) ??
+                  appliedCharacterStyle?.getAttribute(attribute) ??
+                  appliedParagraphStyle?.getAttribute(attribute);
 
-              // get the text segment case
-              const capitalization = range.getAttribute("Capitalization")!;
-              switch (capitalization) {
-                case "AllCaps":
-                  this.engine.block.setTextCase(
-                    block,
-                    "Uppercase",
-                    length,
-                    length + content.length
-                  );
-                  break;
-              }
+                // get the text segment color
+                const color = getAttribute("FillColor") ?? "Black";
+                const rgba = this.colors.get(color);
 
-              // get the text segment font family and style
-              const fontFamily =
-                range.querySelector("AppliedFont")?.innerHTML ?? "Roboto";
-              const fontStyle =
-                (range.getAttribute("FontStyle") as Font["weight"]) ?? "normal";
-
-              font = { family: fontFamily, style: "normal", weight: fontStyle };
-
-              length += range.querySelector("Content")?.innerHTML.length ?? 0;
-            });
-
-            // get the font URI from the font resolver
-            const typefaceResponse = await this.fontResolver(font, this.engine);
-
-            if (!typefaceResponse) {
-              console.log(
-                `Could not find typeface for font ${JSON.stringify(font)}`
-              );
-              this.logger.log(
-                `Could not find typeface for font ${font.family}`,
-                "warning"
-              );
-            }
-
-            if (typefaceResponse) {
-              const fontURI = typefaceResponse.font.uri;
-              // Test if the font is loadable by creating a FontFace
-              // If the font is loadable, we set the font URI on the text block
-              // This was necessary because the CESDK will not render the text
-              // if loading the font errors out
-              try {
-                // use fetch to see if the font is loadable
-                const res = await fetch(fontURI);
-                if (!res.ok) {
-                  throw new Error(`Error loading font at ${fontURI}`);
+                if (rgba) {
+                  this.engine.block.setTextColor(block, rgba, start, end);
                 }
-                this.engine.block.setFont(
-                  block,
-                  fontURI,
-                  typefaceResponse.typeface
-                );
-              } catch (error) {
-                console.error(
-                  "Could not load font at ",
-                  fontURI,
-                  "due to: ",
-                  error
-                );
-              }
-            }
 
-            // get the text alignment
-            const justification = parentStory
-              .querySelector("ParagraphStyleRange")
-              ?.getAttribute("Justification");
+                // get the text segment font size
+                const fontSize =
+                  range.getAttribute("PointSize") ??
+                  appliedParagraphStyle?.getAttribute("PointSize");
+
+                if (fontSize) {
+                  this.engine.block.setTextFontSize(
+                    block,
+                    parseFloat(fontSize),
+                    start,
+                    end
+                  );
+                }
+
+                // get the text segment case
+                const capitalization =
+                  range.getAttribute("Capitalization") ??
+                  appliedParagraphStyle?.getAttribute("Capitalization");
+                switch (capitalization) {
+                  case "AllCaps":
+                    this.engine.block.setTextCase(
+                      block,
+                      "Uppercase",
+                      start,
+                      end
+                    );
+                    break;
+                }
+
+                // get the text segment font family and style
+                const fontFamily =
+                  range.querySelector("AppliedFont")?.innerHTML ??
+                  appliedParagraphStyle?.querySelector("AppliedFont")
+                    ?.innerHTML ??
+                  "Roboto";
+                const { style, weight } = parseFontStyleString(
+                  range.getAttribute("FontStyle") ??
+                    appliedParagraphStyle?.getAttribute("FontStyle") ??
+                    ""
+                );
+                font = {
+                  family: fontFamily,
+                  style,
+                  weight,
+                };
+
+                // get the font URI from the font resolver
+                const typefaceResponse = await this.fontResolver(
+                  font,
+                  this.engine
+                );
+
+                if (!typefaceResponse) {
+                  console.log(
+                    `Could not find typeface for font ${JSON.stringify(font)}`
+                  );
+                  this.logger.log(
+                    `Could not find typeface for font ${font.family}`,
+                    "warning"
+                  );
+                  return;
+                }
+                this.engine.block.setTypeface(
+                  block,
+                  typefaceResponse.typeface,
+                  start,
+                  end
+                );
+                this.engine.block.setTextFontStyle(block, style!, start, end);
+                this.engine.block.setTextFontWeight(block, weight!, start, end);
+              }
+            );
+
+            await Promise.allSettled(applyTextRunPromises);
+
+            // If the story contains a paragraph style range, we also read the paragraph style text alignment
+            // Example XML:
+            // <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/SomeID">
+            // <CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]">
+            const firstParagraphStyle = parentStory.querySelector(
+              "ParagraphStyleRange"
+            );
+            const appliedParagraphStyleId = firstParagraphStyle?.getAttribute(
+              "AppliedParagraphStyle"
+            );
+            const appliedParagraphStyle = this.idml[
+              "Resources/Styles.xml"
+            ].querySelector(
+              `ParagraphStyle[Self="${appliedParagraphStyleId}"]`
+            )!;
+
+            const justification =
+              firstParagraphStyle?.getAttribute("Justification") ??
+              appliedParagraphStyle?.getAttribute("Justification");
 
             // set the text alignment
             switch (justification) {
@@ -891,9 +950,79 @@ export class IDMLParser {
     const imageURI = getImageURI(element, this.logger);
     if (imageURI) {
       const fill = this.engine.block.createFill("image");
-      this.engine.block.setString(fill, "fill/image/imageFileURI", imageURI);
+      this.engine.block.setSourceSet(fill, "fill/image/sourceSet", []);
+      this.engine.block.addImageFileURIToSourceSet(
+        fill,
+        "fill/image/sourceSet",
+        imageURI
+      );
       this.engine.block.setFill(block, fill);
       this.engine.block.setKind(block, "image");
+      // Consider FrameFittingOption when setting the content fill mode
+      // If all frame fitting options are negative, this implies that the image is shrunk inside the frame.
+      // Example: FrameFittingOption LeftCrop="-14.222526745057785" TopCrop="-16.089925261496205" RightCrop="-15.077750964903117" BottomCrop="-16.660074738503738" FittingOnEmptyFrame="Proportionally" />
+      // We do not support a crop that makes the image fill smaller than the (graphics block) frame.
+      // We should add a warning and set the content fill to "Contain" in this case.
+      // Fill mode "Contain" will make sure that the image is not cropped and fits the frame.
+      const frameFittingOption = element.querySelector("FrameFittingOption");
+      if (frameFittingOption) {
+        const [leftCrop, topCrop, rightCrop, bottomCrop] = [
+          "LeftCrop",
+          "TopCrop",
+          "RightCrop",
+          "BottomCrop",
+        ].map((crop) =>
+          parseFloat(frameFittingOption.getAttribute(crop) ?? "0")
+        );
+        if (leftCrop < 0 && topCrop < 0 && rightCrop < 0 && bottomCrop < 0) {
+          this.logger.log(
+            "The image is shrunk inside the frame using. This is currently not supported and might lead to unexpected results.",
+            "warning"
+          );
+          this.engine.block.setContentFillMode(block, "Contain");
+        }
+      }
     }
+  }
+
+  /**
+   * Parses the corner radius of an IDML element and applies it to a CESDK block
+   * @param block The CESDK block to apply the corner radius to
+   * @param element The IDML element
+   * @returns void
+   */
+  private applyBorderRadius(block: number, element: Element) {
+    // Maps the IDML corner attributes to the corresponding CESDK corner attributes
+    const cornerAttributeMap = {
+      TopLeft: "TL",
+      TopRight: "TR",
+      BottomLeft: "BL",
+      BottomRight: "BR",
+    };
+
+    const shape = this.engine.block.getShape(block);
+    const shapeType = this.engine.block.getType(shape);
+    if (!shape || shapeType !== "//ly.img.ubq/shape/rect") {
+      this.logger.log(
+        "Border radius currently can only be applied to rectangle shapes.",
+        "warning"
+      );
+      return;
+    }
+
+    Object.entries(cornerAttributeMap).forEach(([idmlName, cesdkName]) => {
+      if (!element.getAttribute(`${idmlName}CornerOption`)) return;
+
+      const radius =
+        parseFloat(element.getAttribute(`${idmlName}CornerRadius`) ?? "0") /
+        PIXEL_SCALE_FACTOR;
+      if (radius === 0) return;
+
+      this.engine.block.setFloat(
+        shape,
+        `shape/rect/cornerRadius${cesdkName}`,
+        radius
+      );
+    });
   }
 }

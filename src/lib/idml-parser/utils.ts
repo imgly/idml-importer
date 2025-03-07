@@ -1,5 +1,11 @@
-import type { GradientColorStop, RGBAColor, CMYKColor } from "@cesdk/engine";
+import type {
+  CMYKColor,
+  Font,
+  GradientColorStop,
+  RGBAColor,
+} from "@cesdk/engine";
 import JSZip from "jszip";
+import { WEIGHT_ALIAS_MAP } from "./font-resolver";
 import { Logger } from "./logger";
 import type { Gradient, IDML, Vector2 } from "./types";
 /**
@@ -73,11 +79,15 @@ function parseTransformMatrix(transform: number[]) {
   // The rotation is calculated by taking the arctangent of the second row.
   // This provides the rotation in radians. The added 2*PI is to ensure a positive angle.
   const rotation = Math.atan2(b, a) + 2 * Math.PI;
+  const scaleX = Math.sqrt(a * a + b * b);
+  const scaleY = Math.sqrt(c * c + d * d);
 
   return {
     x,
     y,
     rotation,
+    scaleX,
+    scaleY,
   };
 }
 
@@ -256,10 +266,14 @@ export function getTransformAndShapeProperties(
   // after rotation has been applied.
   const x = elementX + centerX - shapeGeometry.centerX - pageGeometricBounds[1];
   const y = elementY + centerY - shapeGeometry.centerY - pageGeometricBounds[0];
+  const width = shapeGeometry.width * elementTransform.scaleX;
+  const height = shapeGeometry.height * elementTransform.scaleY;
 
   return {
     ...shapeGeometry,
     ...elementTransform,
+    width,
+    height,
     x,
     y,
   };
@@ -277,6 +291,15 @@ export function getImageURI(element: Element, logger: Logger) {
 
   // Get the image element
   const image = element.querySelector("Image") ?? element.querySelector("SVG");
+
+  // Check if there is a PDF element, if so log out a warning and return a placeholder image
+  if (!image && element.querySelector("PDF")) {
+    logger.log(
+      "An element contained PDF data, which is not supported yet. The element will be replaced with a placeholder image.",
+      "warning"
+    );
+    return "https://img.ly/static/cesdk/placeholder_image.svg";
+  }
 
   if (!image) return null;
 
@@ -556,4 +579,32 @@ export function replaceSpecialCharacters(input: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'");
+}
+
+/**
+ * Parses a FontStyle= attribute value to extract the weight and style
+ * @param fontStyleString The FontStyle= attribute value
+ * @returns The weight and style extracted from the FontStyle= attribute
+ */
+export function parseFontStyleString(fontStyleString: string): {
+  weight: Font["weight"];
+  style: Font["style"];
+} {
+  if (fontStyleString === "") {
+    return { weight: "normal", style: "normal" };
+  }
+  const standardizedFontStyleString = fontStyleString.toLowerCase();
+  const words = standardizedFontStyleString.split(" ");
+  // if any word is "italic" then the style is italic
+  const style = words.some((word) => word.toLowerCase() === "italic")
+    ? "italic"
+    : "normal";
+
+  const weight =
+    Object.entries(WEIGHT_ALIAS_MAP).find(
+      ([key, value]) =>
+        words.includes(key.toLowerCase()) ||
+        words.includes(value?.toLowerCase() ?? "")
+    )?.[1] ?? "normal";
+  return { weight, style };
 }

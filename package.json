@@ -1,6 +1,6 @@
 {
   "name": "@imgly/idml-importer",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "module": "dist/browser.js",
   "types": "dist/browser.d.ts",
   "type": "module",
@@ -21,16 +21,16 @@
   },
   "homepage": "https://img.ly/showcases/cesdk/indesign-template-import/web",
   "devDependencies": {
-    "@cesdk/engine": "^1.30.0",
-    "@cesdk/node": "^1.30.0",
+    "@cesdk/engine": "^1.40.0",
+    "@cesdk/node": "^1.40.0",
     "bun-plugin-dts": "^0.2.0",
     "bun-types": "latest",
     "jest-image-snapshot": "^6.2.0",
     "jsdom": "^22.1.0"
   },
   "peerDependencies": {
-    "@cesdk/engine": "^1.30.0 ",
-    "@cesdk/node": "^1.30.0",
+    "@cesdk/engine": "^1.40.0 ",
+    "@cesdk/node": "^1.40.0",
     "typescript": "^5.0.0"
   },
   "peerDependenciesMeta": {

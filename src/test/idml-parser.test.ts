@@ -28,6 +28,8 @@ test(
       const exists = await blob.exists();
       expect(exists).toEqual(true);
 
+      console.log("Testing and parsing: ", idmlFilePath);
+
       const arrayBuffer = await blob.arrayBuffer();
       const engine = await CreativeEngine.init({
         license: process.env.CESDK_LICENSE,
@@ -85,8 +87,8 @@ test(
         }
       });
 
-      const sceneString = await engine.scene.saveToString();
-      await Bun.write(`${outputFolderPath}/design.scene`, sceneString);
+      const sceneString = await engine.scene.saveToArchive();
+      await Bun.write(`${outputFolderPath}/design.zip`, sceneString);
       engine.dispose();
     };
 

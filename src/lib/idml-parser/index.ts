@@ -615,9 +615,6 @@ export class IDMLParser {
                 );
 
                 if (!typefaceResponse) {
-                  console.log(
-                    `Could not find typeface for font ${JSON.stringify(font)}`
-                  );
                   this.logger.log(
                     `Could not find typeface for font ${font.family}`,
                     "warning"

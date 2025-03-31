@@ -742,9 +742,13 @@ export class IDMLParser {
             );
             const block = this.engine.block.group(children);
             // reordering the blocks to the correct order
-            children.forEach((child, index) => {
+            const flatChildrenBlocks = children
+              .flat()
+              .filter((block) => block !== null);
+            for (let index = 0; index < flatChildrenBlocks.length; index++) {
+              const child = flatChildrenBlocks[index];
               this.engine.block.insertChild(block, child, index);
-            });
+            }
             this.copyElementName(element, block);
             return [block];
           }
@@ -755,11 +759,13 @@ export class IDMLParser {
       })
     );
     // reorder the blocks into the correct order
-    blocks.flat().forEach((block, index) => {
-      if (index > 0) {
-        this.engine.block.insertChild(pageBlock, block, index);
-      }
-    });
+    // This does not work correct
+    // Children are sorted in their rendering order: Last child is rendered in front of other children.
+    const flatBlocks = blocks.flat().filter((block) => block !== null);
+    for (let index = 0; index < flatBlocks.length; index++) {
+      const block = flatBlocks[index];
+      this.engine.block.insertChild(pageBlock, block, index);
+    }
     return blocks.flat();
   }
 

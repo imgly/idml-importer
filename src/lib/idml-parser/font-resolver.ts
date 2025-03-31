@@ -31,7 +31,7 @@ interface FontResolverResult {
 }
 
 function buildAssetPath(assetPath: string) {
-  return `https://staticimgly.com/imgly/psd-importer/${version}/dist/${assetPath}`;
+  return `https://staticimgly.com/imgly/idml-importer/${version}/dist/${assetPath}`;
 }
 
 export type ContentJSON = {
@@ -131,7 +131,7 @@ const WEIGHTS: Font["weight"][] = [
   "heavy",
 ];
 
-const WEIGHT_ALIAS_MAP: Record<string, Font["weight"]> = {
+export const WEIGHT_ALIAS_MAP: Record<string, Font["weight"]> = {
   "100": "thin",
   "200": "extraLight",
   "300": "light",

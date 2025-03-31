@@ -270,7 +270,7 @@ export class IDMLParser {
             this.engine.block.setShape(block, shape);
             this.engine.block.setKind(block, "shape");
 
-            this.applyImageFill(block, element);
+            await this.applyImageFill(block, element);
             this.applyStroke(block, element);
             this.applyTransparency(block, element);
 
@@ -314,7 +314,7 @@ export class IDMLParser {
             this.engine.block.setShape(block, shape);
 
             this.applyFill(block, element);
-            this.applyImageFill(block, element);
+            await this.applyImageFill(block, element);
             this.applyStroke(block, element);
             this.applyTransparency(block, element);
 
@@ -369,7 +369,7 @@ export class IDMLParser {
             );
 
             this.applyFill(block, element);
-            this.applyImageFill(block, element);
+            await this.applyImageFill(block, element);
             this.applyStroke(block, element);
             this.applyTransparency(block, element);
 
@@ -946,12 +946,12 @@ export class IDMLParser {
    * @param element The IDML element
    * @returns void
    */
-  private applyImageFill(block: number, element: Element) {
+  private async applyImageFill(block: number, element: Element) {
     const imageURI = getImageURI(element, this.logger);
     if (imageURI) {
       const fill = this.engine.block.createFill("image");
       this.engine.block.setSourceSet(fill, "fill/image/sourceSet", []);
-      this.engine.block.addImageFileURIToSourceSet(
+      await this.engine.block.addImageFileURIToSourceSet(
         fill,
         "fill/image/sourceSet",
         imageURI

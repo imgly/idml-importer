@@ -951,11 +951,15 @@ export class IDMLParser {
     if (imageURI) {
       const fill = this.engine.block.createFill("image");
       this.engine.block.setSourceSet(fill, "fill/image/sourceSet", []);
-      await this.engine.block.addImageFileURIToSourceSet(
-        fill,
-        "fill/image/sourceSet",
-        imageURI
-      );
+      try {
+        await this.engine.block.addImageFileURIToSourceSet(
+          fill,
+          "fill/image/sourceSet",
+          imageURI
+        );
+      } catch (e) {
+        this.logger.log(`Could not load image from URI ${imageURI}`, "error");
+      }
       this.engine.block.setFill(block, fill);
       this.engine.block.setKind(block, "image");
       // Consider FrameFittingOption when setting the content fill mode

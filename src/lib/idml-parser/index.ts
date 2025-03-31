@@ -758,8 +758,7 @@ export class IDMLParser {
         }
       })
     );
-    // reorder the blocks into the correct order
-    // This does not work correct
+    // Reorder the blocks into the correct order
     // Children are sorted in their rendering order: Last child is rendered in front of other children.
     const flatBlocks = blocks.flat().filter((block) => block !== null);
     for (let index = 0; index < flatBlocks.length; index++) {

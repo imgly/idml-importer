@@ -292,6 +292,18 @@ export function getImageURI(element: Element, logger: Logger) {
   // Get the image element
   const image = element.querySelector("Image") ?? element.querySelector("SVG");
 
+  const linkChild = getChildByTagName(element, "Link");
+  const isEmbedded = linkChild?.getAttribute("StoredState") === "Embedded";
+  if (!isEmbedded) {
+    // If the image contains a Link element, it is a linked image that is not present in the IDML Source File.
+    // In this case, we fill it with a sample image URI to indicate to the user that it needs to be replaced.
+    logger.log(
+      "Linked images are not supported yet. Please embed all images inside the idml file.",
+      "warning"
+    );
+    return "https://img.ly/static/cesdk/placeholder_image.svg";
+  }
+
   // Check if there is a PDF element, if so log out a warning and return a placeholder image
   if (!image && element.querySelector("PDF")) {
     logger.log(
@@ -306,15 +318,6 @@ export function getImageURI(element: Element, logger: Logger) {
   const contentElement = image.querySelector("Contents")!;
   if (contentElement) {
     return extractEmbeddedImage(image, logger);
-  }
-  // If the image contains a Link element, it is a linked image that is not present in the IDML Source File.
-  // In this case, we fill it with a sample image URI to indicate to the user that it needs to be replaced.
-  if (image.querySelector("Link")) {
-    logger.log(
-      "Linked images are not supported yet. Please embed all images inside the idml file.",
-      "warning"
-    );
-    return "https://img.ly/static/cesdk/placeholder_image.svg";
   }
   // Return null if the image URI could not be extracted
   return null;
@@ -607,4 +610,10 @@ export function parseFontStyleString(fontStyleString: string): {
         words.includes(value?.toLowerCase() ?? "")
     )?.[1] ?? "normal";
   return { weight, style };
+}
+
+function getChildByTagName(parent: Element, tagName: string): Element | null {
+  const children = [...parent.children];
+  const child = children.find((child) => child.tagName === tagName);
+  return child ?? null;
 }

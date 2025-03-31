@@ -13,13 +13,14 @@ export type TypefaceResolver = (
 ) => Promise<FontResolverResult | null>;
 
 export async function addGoogleFontsAssetLibrary(
-  engine: CreativeEngine
+  engine: CreativeEngine,
+  url?: string
 ): Promise<boolean | void> {
   if (engine.asset.findAllSources().includes("ly.img.google-fonts")) {
     return;
   }
   engine.asset.addLocalSource("ly.img.google-fonts");
-  const contentJSON = await fetchGoogleFonts();
+  const contentJSON = await fetchGoogleFonts(url);
   contentJSON.assets.forEach((asset) => {
     engine.asset.addAssetToSource("ly.img.google-fonts", asset);
   });
@@ -29,8 +30,8 @@ interface FontResolverResult {
   font: Font;
 }
 
-function buildUnpkgAssetPath(assetPath: string) {
-  return `https://unpkg.com/@imgly/idml-importer@${version}/dist/assets/${assetPath}`;
+function buildAssetPath(assetPath: string) {
+  return `https://staticimgly.com/imgly/idml-importer/${version}/dist/${assetPath}`;
 }
 
 export type ContentJSON = {
@@ -39,17 +40,20 @@ export type ContentJSON = {
   assets: AssetDefinition[];
 };
 
-async function fetchGoogleFonts(): Promise<ContentJSON> {
-  return fetch(buildUnpkgAssetPath("google-fonts/content.json")).then((res) =>
-    res.json()
-  );
+async function fetchGoogleFonts(customUrl?: string): Promise<ContentJSON> {
+  const url = customUrl ?? buildAssetPath("google-fonts/content.json");
+  return fetch(url)
+    .then((res) => res.json())
+    .catch((e) => {
+      throw new Error(`Failed to fetch google fonts from: ${url} due to ${e}`);
+    });
 }
 
 let assetsPromise: Promise<ContentJSON>;
 
-const typefaceLibrary = "ly.img.google-fonts";
+const defaultTypefaceLibrary = "ly.img.google-fonts";
 /**
- * The default font resolver for the IDML parser.
+ * The default font resolver for the PSD parser.
  * This will try to find a matching google font variant for the given font.
  *
  * @param font The font to resolve
@@ -57,25 +61,38 @@ const typefaceLibrary = "ly.img.google-fonts";
  */
 export default async function fontResolver(
   fontParameters: TypefaceParams,
-  engine: CreativeEngine,
-  typefaceLibrary = "ly.img.google-fonts"
+  engine: CreativeEngine
 ): Promise<FontResolverResult | null> {
-  if (!engine.asset.findAllSources().includes(typefaceLibrary)) {
+  if (!engine.asset.findAllSources().includes(defaultTypefaceLibrary)) {
     throw new Error(
-      `The typeface library ${typefaceLibrary} is not available. Consider adding e.g Google Fonts using addGoogleFontsAssetLibrary.`
+      `The default typeface library ${defaultTypefaceLibrary} is not available.`
     );
   }
   if (fontParameters.family in TYPEFACE_ALIAS_MAP) {
     fontParameters.family = TYPEFACE_ALIAS_MAP[fontParameters.family];
   }
 
-  const typefaceQuery = await engine.asset.findAssets(typefaceLibrary, {
+  let typefaceQuery = await engine.asset.findAssets(defaultTypefaceLibrary, {
     page: 0,
     query: fontParameters.family,
     perPage: 1,
   });
   if (!typefaceQuery || typefaceQuery.assets.length === 0) {
-    return null;
+    // check for cases like OpenSansRoman
+    const queries = pascalCaseToArray(fontParameters.family);
+    for (const query of queries) {
+      typefaceQuery = await engine.asset.findAssets(defaultTypefaceLibrary, {
+        page: 0,
+        query: query,
+        perPage: 1,
+      });
+      if (typefaceQuery && typefaceQuery.assets.length > 0) {
+        break;
+      }
+    }
+    if (!typefaceQuery || typefaceQuery.assets.length === 0) {
+      return null;
+    }
   }
   const typeface = typefaceQuery.assets[0].payload?.typeface;
   if (!typeface) {
@@ -93,14 +110,26 @@ export default async function fontResolver(
 
     return false;
   });
-  if (font) {
-    return {
-      typeface,
-      font,
-    };
+  if (!font) {
+    return null;
   }
-  return null;
+  return {
+    typeface,
+    font,
+  };
 }
+
+const WEIGHTS: Font["weight"][] = [
+  "thin",
+  "extraLight",
+  "light",
+  "normal",
+  "medium",
+  "semiBold",
+  "bold",
+  "extraBold",
+  "heavy",
+];
 
 export const WEIGHT_ALIAS_MAP: Record<string, Font["weight"]> = {
   "100": "thin",
@@ -126,8 +155,11 @@ const TYPEFACE_ALIAS_MAP: Record<string, string> = {
 };
 
 function isEqualWeight(weightString: string, fontWeight: Font["weight"]) {
+  if (weightString && weightString === fontWeight) {
+    return true;
+  }
   const lowerCaseWeightString = weightString.toLowerCase();
-  if (lowerCaseWeightString === fontWeight!.toLowerCase()) {
+  if (lowerCaseWeightString === fontWeight) {
     return true;
   }
   const weightAlias = WEIGHT_ALIAS_MAP[lowerCaseWeightString];
@@ -135,4 +167,28 @@ function isEqualWeight(weightString: string, fontWeight: Font["weight"]) {
     return true;
   }
   return false;
+}
+
+function pascalCaseToArray(pascalCaseString: string): string[] {
+  // convert PascalCase to a sentence with spaces
+  // input: "OpenSansItalic"
+  // Output: ["OpenSansItalic", "Open Sans Italic", "Open Sans", "Open"]
+  const spacedString = pascalCaseString
+    .replace(/([A-Z])/g, " $1") // insert space before each uppercase letter
+    .trim(); // remove leading/trailing whitespace
+
+  // split the spaced string into words
+  const words = spacedString.split(" ");
+  if (words.length < 2) {
+    return [];
+  }
+
+  // generate the desired array of strings
+  const result = [];
+  for (let i = words.length; i > 0; i--) {
+    const currentWords = words.slice(0, i).join(" ");
+    result.push(currentWords);
+  }
+
+  return result;
 }

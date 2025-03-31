@@ -45,6 +45,12 @@ test(
       let result;
       try {
         result = await parser.parse();
+
+        const { logger } = result;
+        const messages = logger.getMessages();
+        messages.forEach((message) => {
+          console.log(message);
+        });
       } catch (e) {
         console.error(e);
         return;

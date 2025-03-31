@@ -615,9 +615,6 @@ export class IDMLParser {
                 );
 
                 if (!typefaceResponse) {
-                  console.log(
-                    `Could not find typeface for font ${JSON.stringify(font)}`
-                  );
                   this.logger.log(
                     `Could not find typeface for font ${font.family}`,
                     "warning"
@@ -745,9 +742,13 @@ export class IDMLParser {
             );
             const block = this.engine.block.group(children);
             // reordering the blocks to the correct order
-            children.forEach((child, index) => {
+            const flatChildrenBlocks = children
+              .flat()
+              .filter((block) => block !== null);
+            for (let index = 0; index < flatChildrenBlocks.length; index++) {
+              const child = flatChildrenBlocks[index];
               this.engine.block.insertChild(block, child, index);
-            });
+            }
             this.copyElementName(element, block);
             return [block];
           }
@@ -757,12 +758,13 @@ export class IDMLParser {
         }
       })
     );
-    // reorder the blocks into the correct order
-    blocks.flat().forEach((block, index) => {
-      if (index > 0) {
-        this.engine.block.insertChild(pageBlock, block, index);
-      }
-    });
+    // Reorder the blocks into the correct order
+    // Children are sorted in their rendering order: Last child is rendered in front of other children.
+    const flatBlocks = blocks.flat().filter((block) => block !== null);
+    for (let index = 0; index < flatBlocks.length; index++) {
+      const block = flatBlocks[index];
+      this.engine.block.insertChild(pageBlock, block, index);
+    }
     return blocks.flat();
   }
 
@@ -951,11 +953,15 @@ export class IDMLParser {
     if (imageURI) {
       const fill = this.engine.block.createFill("image");
       this.engine.block.setSourceSet(fill, "fill/image/sourceSet", []);
-      await this.engine.block.addImageFileURIToSourceSet(
-        fill,
-        "fill/image/sourceSet",
-        imageURI
-      );
+      try {
+        await this.engine.block.addImageFileURIToSourceSet(
+          fill,
+          "fill/image/sourceSet",
+          imageURI
+        );
+      } catch (e) {
+        this.logger.log(`Could not load image from URI ${imageURI}`, "error");
+      }
       this.engine.block.setFill(block, fill);
       this.engine.block.setKind(block, "image");
       // Consider FrameFittingOption when setting the content fill mode

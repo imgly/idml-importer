@@ -3,6 +3,7 @@
 
 import { IDMLParser as P } from "../src/lib/idml-parser";
 import { Logger as L } from "../src/lib/idml-parser/logger";
+import { addGoogleFontsAssetLibrary as a } from "../src/lib/idml-parser/font-resolver";
 
 // import CreativeEngine from "@cesdk/node";
 // import { JSDOM } from "jsdom";
@@ -21,4 +22,4 @@ import { Logger as L } from "../src/lib/idml-parser/logger";
 
 // const parser = P<typeof CreativeEngine>;
 
-export { P as IDMLParser, L as Logger };
+export { P as IDMLParser, L as Logger, a as addGoogleFontsAssetLibrary };

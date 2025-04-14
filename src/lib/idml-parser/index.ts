@@ -18,11 +18,10 @@ import {
 
 // The design unit used in the CESDK Editor
 const DESIGN_UNIT = "Inch";
-/**
- * The pixel scale factor used in the CESDK Editor
- * This is used to convert the IDML file's pixel values to CESDK's design unit
- */
-const PIXEL_SCALE_FACTOR = 72;
+// "The units used by the pasteboard coordinate system are points, defined as 72 units per inch.
+// Changing the definition of points in the In­ Design user interface has no effect on the definition
+// of points used in IDML."
+const POINT_TO_INCH = 72;
 const DEFAULT_FONT_NAME = "Roboto";
 
 // Element types of the spreads in the IDML file
@@ -84,20 +83,16 @@ export class IDMLParser {
     this.engine.block.setBool(stack, "stack/spacingInScreenspace", true);
 
     this.engine.scene.setDesignUnit(DESIGN_UNIT);
-    this.engine.block.setFloat(
-      this.scene,
-      "scene/pixelScaleFactor",
-      PIXEL_SCALE_FACTOR
-    );
+    this.engine.block.setInt(this.scene, "scene/dpi", POINT_TO_INCH);
     this.engine.block.setFloat(
       this.scene,
       "scene/pageDimensions/width",
-      width / PIXEL_SCALE_FACTOR
+      width / POINT_TO_INCH
     );
     this.engine.block.setFloat(
       this.scene,
       "scene/pageDimensions/height",
-      height / PIXEL_SCALE_FACTOR
+      height / POINT_TO_INCH
     );
     this.engine.editor;
   }
@@ -152,19 +147,19 @@ export class IDMLParser {
     const bleedMargins = {
       top:
         parseFloat(documentPreference.getAttribute("DocumentBleedTopOffset")!) /
-        PIXEL_SCALE_FACTOR,
+        POINT_TO_INCH,
       bottom:
         parseFloat(
           documentPreference.getAttribute("DocumentBleedBottomOffset")!
-        ) / PIXEL_SCALE_FACTOR,
+        ) / POINT_TO_INCH,
       left:
         parseFloat(
           documentPreference.getAttribute("DocumentBleedInsideOrLeftOffset")!
-        ) / PIXEL_SCALE_FACTOR,
+        ) / POINT_TO_INCH,
       right:
         parseFloat(
           documentPreference.getAttribute("DocumentBleedOutsideOrRightOffset")!
-        ) / PIXEL_SCALE_FACTOR,
+        ) / POINT_TO_INCH,
     };
     return bleedMargins;
   }
@@ -191,8 +186,8 @@ export class IDMLParser {
       const pageBlock = this.engine.block.create("//ly.img.ubq/page");
 
       // Convert the page dimensions from points to the CESDK design unit
-      const width = pageAttributes.width / PIXEL_SCALE_FACTOR;
-      const height = pageAttributes.height / PIXEL_SCALE_FACTOR;
+      const width = pageAttributes.width / POINT_TO_INCH;
+      const height = pageAttributes.height / POINT_TO_INCH;
 
       // Set the page name, width, and height
       this.engine.block.setName(pageBlock, pageAttributes.name);
@@ -430,15 +425,15 @@ export class IDMLParser {
 
             // Convert the line's height from points to the CESDK design unit
             if (strokeWeight) {
-              const height = parseFloat(strokeWeight) / PIXEL_SCALE_FACTOR;
+              const height = parseFloat(strokeWeight) / POINT_TO_INCH;
               this.engine.block.setHeight(block, height);
             } else {
               console.warn("No stroke weight found for line");
             }
             // Convert the line's dimensions from points to the CESDK design unit
-            const x = lineAttributes.x / PIXEL_SCALE_FACTOR;
-            const y = lineAttributes.y / PIXEL_SCALE_FACTOR;
-            const width = lineAttributes.width / PIXEL_SCALE_FACTOR;
+            const x = lineAttributes.x / POINT_TO_INCH;
+            const y = lineAttributes.y / POINT_TO_INCH;
+            const width = lineAttributes.width / POINT_TO_INCH;
 
             this.engine.block.setPositionX(block, x);
             this.engine.block.setPositionY(block, y);
@@ -692,10 +687,10 @@ export class IDMLParser {
             );
 
             // Convert the text frame's dimensions from points to the CESDK design unit
-            const x = textFrameAttributes.x / PIXEL_SCALE_FACTOR;
-            const y = textFrameAttributes.y / PIXEL_SCALE_FACTOR;
-            const width = textFrameAttributes.width / PIXEL_SCALE_FACTOR;
-            const height = textFrameAttributes.height / PIXEL_SCALE_FACTOR;
+            const x = textFrameAttributes.x / POINT_TO_INCH;
+            const y = textFrameAttributes.y / POINT_TO_INCH;
+            const width = textFrameAttributes.width / POINT_TO_INCH;
+            const height = textFrameAttributes.height / POINT_TO_INCH;
 
             this.engine.block.setPositionX(block, x);
             this.engine.block.setPositionY(block, y);
@@ -898,7 +893,7 @@ export class IDMLParser {
     // from the document colors using the ID and apply the stroke to the block
     if (strokeWeight && strokeColor && this.colors.has(strokeColor)) {
       const rgba = this.colors.get(strokeColor)!;
-      const width = parseFloat(strokeWeight) / PIXEL_SCALE_FACTOR;
+      const width = parseFloat(strokeWeight) / POINT_TO_INCH;
       this.engine.block.setStrokeWidth(block, width);
       this.engine.block.setStrokeColor(block, rgba);
 
@@ -1021,7 +1016,7 @@ export class IDMLParser {
 
       const radius =
         parseFloat(element.getAttribute(`${idmlName}CornerRadius`) ?? "0") /
-        PIXEL_SCALE_FACTOR;
+        POINT_TO_INCH;
       if (radius === 0) return;
 
       this.engine.block.setFloat(

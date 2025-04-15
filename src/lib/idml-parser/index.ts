@@ -15,6 +15,7 @@ import {
   replaceSpecialCharacters,
   unzipIdmlFile,
 } from "./utils";
+import { image } from "@milkdown/preset-commonmark";
 
 // The design unit used in the CESDK Editor
 const DESIGN_UNIT = "Inch";
@@ -248,9 +249,15 @@ export class IDMLParser {
         if (!visible) return [];
         // Render the CESDK block based on the element type
         switch (element.tagName) {
-          case SPREAD_ELEMENTS.RECTANGLE: {
+          case SPREAD_ELEMENTS.RECTANGLE:
+          case SPREAD_ELEMENTS.POLYGON:
+          case SPREAD_ELEMENTS.OVAL: {
+            // if we have a <Image> element child or <SVG> element child, get it
+            // const imageElement = element.querySelector("Image");
+            // const svgElement = element.querySelector("SVG");
             // Get the rectangle's transform and dimensions
-            const rectAttributes = getTransformAndShapeProperties(
+            const shapeAttributes = getTransformAndShapeProperties(
+              // imageElement ?? svgElement ?? element,
               element,
               spread
             );
@@ -259,29 +266,135 @@ export class IDMLParser {
 
             // If the rectangle has an image URI, create an image block
             block = this.engine.block.create("//ly.img.ubq/graphic");
-            const shape = this.engine.block.createShape(
-              "//ly.img.ubq/shape/rect"
-            );
+
+            // if polygon:
+            let shape: number;
+            if (element.tagName === SPREAD_ELEMENTS.POLYGON) {
+              this.engine.block.setKind(block, "shape");
+              shape = this.engine.block.createShape(
+                "//ly.img.ubq/shape/vector_path"
+              );
+
+              // Set the vector path's path data, width, and height
+              this.engine.block.setString(
+                shape,
+                "vector_path/path",
+                shapeAttributes.pathData
+              );
+              this.engine.block.setFloat(
+                shape,
+                "vector_path/width",
+                shapeAttributes.width
+              );
+              this.engine.block.setFloat(
+                shape,
+                "vector_path/height",
+                shapeAttributes.height
+              );
+            } else if (element.tagName === SPREAD_ELEMENTS.OVAL) {
+              // if the element is an oval, we need to set the shape to a circle
+              shape = this.engine.block.createShape(
+                "//ly.img.ubq/shape/ellipse"
+              );
+            } else if (element.tagName === SPREAD_ELEMENTS.RECTANGLE) {
+              // if the element is a rectangle, we need to set the shape to a rectangle
+              shape = this.engine.block.createShape("//ly.img.ubq/shape/rect");
+            } else {
+              throw new Error("Unknown shape type");
+            }
             this.engine.block.setShape(block, shape);
+
+            // TODO: Maybe "image"?
             this.engine.block.setKind(block, "shape");
 
-            await this.applyImageFill(block, element);
             this.applyStroke(block, element);
             this.applyTransparency(block, element);
 
+            // set red color fill for testing:
+            // this.engine.block.setFillEnabled(block, true);
+            const fill = this.engine.block.createFill("color");
+            this.engine.block.setColor(fill, "fill/color/value", {
+              r: 1,
+              g: 0,
+              b: 0,
+              a: 1,
+            });
+            this.engine.block.setFill(block, fill);
+            // add stroke for visibility
+            this.engine.block.setStrokeEnabled(block, true);
+            this.engine.block.setStrokeColor(block, { r: 0, b: 1, g: 0, a: 1 });
+            this.engine.block.setStrokeWidth(block, 0.01);
+
             this.engine.block.appendChild(pageBlock, block);
 
-            // Convert the rectangle's dimensions from points to the CESDK design unit
-            const x = rectAttributes.x / PIXEL_SCALE_FACTOR;
-            const y = rectAttributes.y / PIXEL_SCALE_FACTOR;
-            const width = rectAttributes.width / PIXEL_SCALE_FACTOR;
-            const height = rectAttributes.height / PIXEL_SCALE_FACTOR;
+            const applyLayout = (
+              block: number,
+              {
+                x,
+                y,
+                width,
+                height,
+                rotation,
+              }: {
+                x: number;
+                y: number;
+                width: number;
+                height: number;
+                rotation: number;
+              }
+            ) => {
+              this.engine.block.setPositionX(block, x / POINT_TO_INCH);
+              this.engine.block.setPositionY(block, y / POINT_TO_INCH);
+              this.engine.block.setWidth(block, width / POINT_TO_INCH);
+              this.engine.block.setHeight(block, height / POINT_TO_INCH);
+              this.engine.block.setRotation(block, rotation);
+            };
+            console.log("b1", block, shapeAttributes);
+            applyLayout(block, shapeAttributes);
 
-            this.engine.block.setPositionX(block, x);
-            this.engine.block.setPositionY(block, y);
-            this.engine.block.setWidth(block, width);
-            this.engine.block.setHeight(block, height);
-            this.engine.block.setRotation(block, rectAttributes.rotation);
+            await this.applyImageFill(block, element);
+
+            let innerImageBlock: number | null = null;
+            const imageElement =
+              element.getElementsByTagName("Image")[0] ??
+              element.getElementsByTagName("SVG")[0];
+            // if this is an image, create another image but include the item transform
+            if (imageElement) {
+              const innerImageBlock = this.engine.block.create(
+                "//ly.img.ubq/graphic"
+              );
+              // copy shape
+              // const shapeInner = this.engine.block.duplicate(shape);
+              const shapeInner = this.engine.block.createShape(
+                "//ly.img.ubq/shape/rect"
+              );
+              this.engine.block.setShape(innerImageBlock, shapeInner);
+              await this.applyImageFill(innerImageBlock, element);
+              //append
+              this.engine.block.appendChild(pageBlock, innerImageBlock);
+              // add red stroke:
+              this.engine.block.setStrokeEnabled(innerImageBlock, true);
+              this.engine.block.setStrokeColor(innerImageBlock, {
+                r: 0,
+                b: 0,
+                g: 1,
+                a: 1,
+              });
+              console.log("b2", block, innerImageBlock, shapeAttributes);
+              if (!imageElement) {
+                throw new Error("No image element found" + element.outerHTML);
+              }
+              const imageItemTransform = imageElement
+                .getAttribute("ItemTransform")!
+                .split(" ")
+                .map(parseFloat);
+              const imageShapeAttributes = getTransformAndShapeProperties(
+                element,
+                spread,
+                [imageItemTransform]
+              );
+              applyLayout(innerImageBlock, imageShapeAttributes);
+            }
 
             if (this.engine.block.getKind(block) === "shape") {
               // Fill needs to be applied after setting height and width, because gradient fills need the dimensions
@@ -290,100 +403,7 @@ export class IDMLParser {
             }
 
             this.copyElementName(element, block);
-            return [block];
-          }
-
-          case SPREAD_ELEMENTS.OVAL: {
-            // Get the oval's transform and dimensions
-            const ovalAttributes = getTransformAndShapeProperties(
-              element,
-              spread
-            );
-
-            // Create an ellipse block
-            const block = this.engine.block.create("//ly.img.ubq/graphic");
-            this.engine.block.setKind(block, "shape");
-            const shape = this.engine.block.createShape(
-              "//ly.img.ubq/shape/ellipse"
-            );
-            this.engine.block.setShape(block, shape);
-
-            this.applyFill(block, element);
-            await this.applyImageFill(block, element);
-            this.applyStroke(block, element);
-            this.applyTransparency(block, element);
-
-            this.engine.block.appendChild(pageBlock, block);
-
-            // Convert the oval's dimensions from points to the CESDK design unit
-            const x = ovalAttributes.x / PIXEL_SCALE_FACTOR;
-            const y = ovalAttributes.y / PIXEL_SCALE_FACTOR;
-            const width = ovalAttributes.width / PIXEL_SCALE_FACTOR;
-            const height = ovalAttributes.height / PIXEL_SCALE_FACTOR;
-
-            this.engine.block.setPositionX(block, x);
-            this.engine.block.setPositionY(block, y);
-            this.engine.block.setWidth(block, width);
-            this.engine.block.setHeight(block, height);
-            this.engine.block.setRotation(block, ovalAttributes.rotation);
-
-            this.copyElementName(element, block);
-            return [block];
-          }
-
-          case SPREAD_ELEMENTS.POLYGON: {
-            // Get the polygon's transform and dimensions
-            const polygonAttributes = getTransformAndShapeProperties(
-              element,
-              spread
-            );
-
-            // Create a vector path block
-            const block = this.engine.block.create("//ly.img.ubq/graphic");
-            this.engine.block.setKind(block, "shape");
-            const shape = this.engine.block.createShape(
-              "//ly.img.ubq/shape/vector_path"
-            );
-            this.engine.block.setShape(block, shape);
-
-            // Set the vector path's path data, width, and height
-            this.engine.block.setString(
-              shape,
-              "vector_path/path",
-              polygonAttributes.pathData
-            );
-            this.engine.block.setFloat(
-              shape,
-              "vector_path/width",
-              polygonAttributes.width
-            );
-            this.engine.block.setFloat(
-              shape,
-              "vector_path/height",
-              polygonAttributes.height
-            );
-
-            this.applyFill(block, element);
-            await this.applyImageFill(block, element);
-            this.applyStroke(block, element);
-            this.applyTransparency(block, element);
-
-            this.engine.block.appendChild(pageBlock, block);
-
-            // Convert the polygon's dimensions from points to the CESDK design unit
-            const x = polygonAttributes.x / PIXEL_SCALE_FACTOR;
-            const y = polygonAttributes.y / PIXEL_SCALE_FACTOR;
-            const width = polygonAttributes.width / PIXEL_SCALE_FACTOR;
-            const height = polygonAttributes.height / PIXEL_SCALE_FACTOR;
-
-            this.engine.block.setPositionX(block, x);
-            this.engine.block.setPositionY(block, y);
-            this.engine.block.setWidth(block, width);
-            this.engine.block.setHeight(block, height);
-            this.engine.block.setRotation(block, polygonAttributes.rotation);
-
-            this.copyElementName(element, block);
-            return [block];
+            return innerImageBlock ? [block, innerImageBlock] : [block];
           }
 
           case SPREAD_ELEMENTS.GRAPHIC_LINE: {
@@ -945,43 +965,41 @@ export class IDMLParser {
    */
   private async applyImageFill(block: number, element: Element) {
     const imageURI = getImageURI(element, this.logger);
-    if (imageURI) {
-      const fill = this.engine.block.createFill("image");
-      this.engine.block.setSourceSet(fill, "fill/image/sourceSet", []);
-      try {
-        await this.engine.block.addImageFileURIToSourceSet(
-          fill,
-          "fill/image/sourceSet",
-          imageURI
+    if (!imageURI) return;
+
+    const fill = this.engine.block.createFill("image");
+    this.engine.block.setSourceSet(fill, "fill/image/sourceSet", []);
+    try {
+      await this.engine.block.addImageFileURIToSourceSet(
+        fill,
+        "fill/image/sourceSet",
+        imageURI
+      );
+    } catch (e) {
+      this.logger.log(`Could not load image from URI ${imageURI}`, "error");
+    }
+    this.engine.block.setFill(block, fill);
+    this.engine.block.setKind(block, "image");
+    // Consider FrameFittingOption when setting the content fill mode
+    // If all frame fitting options are negative, this implies that the image is shrunk inside the frame.
+    // Example: FrameFittingOption LeftCrop="-14.222526745057785" TopCrop="-16.089925261496205" RightCrop="-15.077750964903117" BottomCrop="-16.660074738503738" FittingOnEmptyFrame="Proportionally" />
+    // We do not support a crop that makes the image fill smaller than the (graphics block) frame.
+    // We should add a warning and set the content fill to "Contain" in this case.
+    // Fill mode "Contain" will make sure that the image is not cropped and fits the frame.
+    const frameFittingOption = element.querySelector("FrameFittingOption");
+    if (frameFittingOption) {
+      const [leftCrop, topCrop, rightCrop, bottomCrop] = [
+        "LeftCrop",
+        "TopCrop",
+        "RightCrop",
+        "BottomCrop",
+      ].map((crop) => parseFloat(frameFittingOption.getAttribute(crop) ?? "0"));
+      if (leftCrop < 0 && topCrop < 0 && rightCrop < 0 && bottomCrop < 0) {
+        this.logger.log(
+          "The image is shrunk inside the frame using. This is currently not supported and might lead to unexpected results.",
+          "warning"
         );
-      } catch (e) {
-        this.logger.log(`Could not load image from URI ${imageURI}`, "error");
-      }
-      this.engine.block.setFill(block, fill);
-      this.engine.block.setKind(block, "image");
-      // Consider FrameFittingOption when setting the content fill mode
-      // If all frame fitting options are negative, this implies that the image is shrunk inside the frame.
-      // Example: FrameFittingOption LeftCrop="-14.222526745057785" TopCrop="-16.089925261496205" RightCrop="-15.077750964903117" BottomCrop="-16.660074738503738" FittingOnEmptyFrame="Proportionally" />
-      // We do not support a crop that makes the image fill smaller than the (graphics block) frame.
-      // We should add a warning and set the content fill to "Contain" in this case.
-      // Fill mode "Contain" will make sure that the image is not cropped and fits the frame.
-      const frameFittingOption = element.querySelector("FrameFittingOption");
-      if (frameFittingOption) {
-        const [leftCrop, topCrop, rightCrop, bottomCrop] = [
-          "LeftCrop",
-          "TopCrop",
-          "RightCrop",
-          "BottomCrop",
-        ].map((crop) =>
-          parseFloat(frameFittingOption.getAttribute(crop) ?? "0")
-        );
-        if (leftCrop < 0 && topCrop < 0 && rightCrop < 0 && bottomCrop < 0) {
-          this.logger.log(
-            "The image is shrunk inside the frame using. This is currently not supported and might lead to unexpected results.",
-            "warning"
-          );
-          this.engine.block.setContentFillMode(block, "Contain");
-        }
+        this.engine.block.setContentFillMode(block, "Contain");
       }
     }
   }

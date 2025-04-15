@@ -216,7 +216,8 @@ export function parsePathGeometry(pathGeometry: Element) {
  */
 export function getTransformAndShapeProperties(
   element: Element,
-  page: Element
+  page: Element,
+  additionalTransforms: number[][] = []
 ) {
   // Get the 2x3 transformation matrix of the page
   const pageItemTransform = page
@@ -237,7 +238,53 @@ export function getTransformAndShapeProperties(
 
   // Extracts the transformations and dimensions.
   const pageTransform = parseTransformMatrix(pageItemTransform);
-  const elementTransform = parseTransformMatrix(elementItemTransform);
+  // elements between the page and the element in the tree:
+  const ancestors: Element[] = [];
+  let currentElement = element;
+  while (
+    currentElement.parentElement &&
+    currentElement.parentElement.tagName !== "Spread"
+  ) {
+    ancestors.push(currentElement.parentElement);
+    currentElement = currentElement.parentElement;
+  }
+  const allTransforms = ancestors
+    .map((ancestor) => {
+      const transform = ancestor.getAttribute("ItemTransform");
+      if (!transform) return null;
+      return transform.split(" ").map(parseFloat);
+    })
+    .filter((transform) => transform !== null) as number[][];
+  // Combine all transforms into one
+  const combinedTransform = [
+    ...allTransforms,
+    ...additionalTransforms,
+    elementItemTransform,
+  ].reduce(
+    (acc, transform) => {
+      const [a, b, c, d, e, f] = transform;
+      const [a1, b1, c1, d1, e1, f1] = acc;
+      return [
+        a * a1 + b * c1,
+        a * b1 + b * d1,
+        c * a1 + d * c1,
+        c * b1 + d * d1,
+        e * a1 + f * c1 + e1,
+        e * b1 + f * d1 + f1,
+      ];
+    },
+    // start with empty transform
+    [1, 0, 0, 1, 0, 0]
+  );
+  // parseTransformMatrix(elementItemTransform)
+  // Apply the combined transform to the page transform
+  console.log({
+    pageTransform,
+    combinedTransform,
+    ancestors: ancestors.map((ancestor) => ancestor.tagName),
+  });
+
+  const elementTransform = parseTransformMatrix(combinedTransform);
   const shapeGeometry = parsePathGeometry(elementPathGeometry);
 
   // Calculates offsets between the page and the shape.
@@ -616,4 +663,30 @@ function getChildByTagName(parent: Element, tagName: string): Element | null {
   const children = [...parent.children];
   const child = children.find((child) => child.tagName === tagName);
   return child ?? null;
+}
+
+export function createShapeFromElement(
+  engine: CreativeEngine,
+  element: Element
+) {
+  this.engine.block.setKind(block, "shape");
+  const shape = this.engine.block.createShape("//ly.img.ubq/shape/vector_path");
+  this.engine.block.setShape(block, shape);
+
+  // Set the vector path's path data, width, and height
+  this.engine.block.setString(
+    shape,
+    "vector_path/path",
+    polygonAttributes.pathData
+  );
+  this.engine.block.setFloat(
+    shape,
+    "vector_path/width",
+    polygonAttributes.width
+  );
+  this.engine.block.setFloat(
+    shape,
+    "vector_path/height",
+    polygonAttributes.height
+  );
 }

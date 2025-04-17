@@ -317,7 +317,7 @@ export class IDMLParser {
               r: 1,
               g: 0,
               b: 0,
-              a: 1,
+              a: 0.3,
             });
             this.engine.block.setFill(block, fill);
             // add stroke for visibility
@@ -343,24 +343,26 @@ export class IDMLParser {
                 rotation: number;
               }
             ) => {
-              this.engine.block.setPositionX(block, x / POINT_TO_INCH);
-              this.engine.block.setPositionY(block, y / POINT_TO_INCH);
               this.engine.block.setWidth(block, width / POINT_TO_INCH);
               this.engine.block.setHeight(block, height / POINT_TO_INCH);
               this.engine.block.setRotation(block, rotation);
+              this.engine.block.setPositionX(block, x / POINT_TO_INCH);
+              this.engine.block.setPositionY(block, y / POINT_TO_INCH);
             };
             console.log("b1", block, shapeAttributes);
             applyLayout(block, shapeAttributes);
 
-            await this.applyImageFill(block, element);
+            // await this.applyImageFill(block, element);
 
             let innerImageBlock: number | null = null;
             const imageElement =
               element.getElementsByTagName("Image")[0] ??
-              element.getElementsByTagName("SVG")[0];
+              element.getElementsByTagName("SVG")[0] ??
+              element.getElementsByTagName("PDF")[0] ??
+              element.getElementsByTagName("EPS")[0];
             // if this is an image, create another image but include the item transform
             if (imageElement) {
-              const innerImageBlock = this.engine.block.create(
+              innerImageBlock = this.engine.block.create(
                 "//ly.img.ubq/graphic"
               );
               // copy shape
@@ -380,7 +382,6 @@ export class IDMLParser {
                 g: 1,
                 a: 1,
               });
-              console.log("b2", block, innerImageBlock, shapeAttributes);
               if (!imageElement) {
                 throw new Error("No image element found" + element.outerHTML);
               }
@@ -390,8 +391,8 @@ export class IDMLParser {
                 .map(parseFloat);
               const imageShapeAttributes = getTransformAndShapeProperties(
                 element,
-                spread,
-                [imageItemTransform]
+                spread
+                // [imageItemTransform]
               );
               applyLayout(innerImageBlock, imageShapeAttributes);
             }
@@ -403,6 +404,7 @@ export class IDMLParser {
             }
 
             this.copyElementName(element, block);
+            // return [innerImageBlock];
             return innerImageBlock ? [block, innerImageBlock] : [block];
           }
 
@@ -455,10 +457,10 @@ export class IDMLParser {
             const y = lineAttributes.y / POINT_TO_INCH;
             const width = lineAttributes.width / POINT_TO_INCH;
 
+            this.engine.block.setRotation(block, lineAttributes.rotation);
+            this.engine.block.setWidth(block, width);
             this.engine.block.setPositionX(block, x);
             this.engine.block.setPositionY(block, y);
-            this.engine.block.setWidth(block, width);
-            this.engine.block.setRotation(block, lineAttributes.rotation);
 
             this.copyElementName(element, block);
             return [block];
@@ -712,11 +714,11 @@ export class IDMLParser {
             const width = textFrameAttributes.width / POINT_TO_INCH;
             const height = textFrameAttributes.height / POINT_TO_INCH;
 
-            this.engine.block.setPositionX(block, x);
-            this.engine.block.setPositionY(block, y);
             this.engine.block.setWidth(block, width);
             this.engine.block.setHeight(block, height);
             this.engine.block.setRotation(block, textFrameAttributes.rotation);
+            this.engine.block.setPositionX(block, x);
+            this.engine.block.setPositionY(block, y);
 
             let backgroundBlock: number | null = null;
             // If the text frame has a fill color, we create a rectangle block to use as the background
@@ -731,16 +733,27 @@ export class IDMLParser {
               this.engine.block.setShape(backgroundBlock, shape);
 
               this.engine.block.appendChild(pageBlock, backgroundBlock);
-              this.engine.block.setPositionX(backgroundBlock, x);
-              this.engine.block.setPositionY(backgroundBlock, y);
               this.engine.block.setWidth(backgroundBlock, width);
               this.engine.block.setHeight(backgroundBlock, height);
               this.engine.block.setRotation(
                 backgroundBlock,
                 textFrameAttributes.rotation
               );
+              this.engine.block.setPositionX(backgroundBlock, x);
+              this.engine.block.setPositionY(backgroundBlock, y);
+
               this.applyFill(backgroundBlock, element);
             }
+            // todo remove
+            // add stroke for debug
+            // this.engine.block.setStrokeEnabled(block, true);
+            // this.engine.block.setStrokeColor(block, {
+            //   r: 0,
+            //   b: 1,
+            //   g: 0,
+            //   a: 1,
+            // });
+
             this.engine.block.appendChild(pageBlock, block);
 
             this.copyElementName(element, block);
@@ -776,6 +789,7 @@ export class IDMLParser {
     // Reorder the blocks into the correct order
     // Children are sorted in their rendering order: Last child is rendered in front of other children.
     const flatBlocks = blocks.flat().filter((block) => block !== null);
+    console.log("flatBlocks", { flatBlocks, blocks });
     for (let index = 0; index < flatBlocks.length; index++) {
       const block = flatBlocks[index];
       this.engine.block.insertChild(pageBlock, block, index);

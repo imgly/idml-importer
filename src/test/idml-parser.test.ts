@@ -5,7 +5,7 @@ import glob from "glob";
 import { JSDOM } from "jsdom";
 import { IDMLParser } from "../lib/idml-parser";
 import { addGoogleFontsAssetLibrary } from "../lib/idml-parser/font-resolver";
-const filePaths = glob.sync("./src/test/examples/**/Radeberger.idml");
+const filePaths = glob.sync("./src/test/examples/**/*.idml");
 
 function DOMParser(content: string) {
   return new JSDOM(content, {

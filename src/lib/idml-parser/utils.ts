@@ -8,6 +8,7 @@ import JSZip from "jszip";
 import { WEIGHT_ALIAS_MAP } from "./font-resolver";
 import { Logger } from "./logger";
 import type { Gradient, IDML, Vector2 } from "./types";
+import { Matrix, multiplyItemTransforms, transformPoint } from "./transforms";
 /**
  * Extracts the contents of an IDML file into a map of filenames to XML documents
  *
@@ -67,7 +68,7 @@ export function getPageAttributes(page: Element) {
  * @param transform - The 2x3 transformation matrix array.
  * @returns An object with x and y translations and the rotation (in radians).
  */
-function parseTransformMatrix(transform: number[]) {
+function parseTransformMatrix(transform: Matrix) {
   // Destructure the 2x3 matrix elements. The format is [a, b, c, d, e, f], where
   // a and d represent scaling, b and c represent rotation, and e and f represent translation.
   const [a, b, c, d, e, f] = transform;
@@ -78,7 +79,7 @@ function parseTransformMatrix(transform: number[]) {
 
   // The rotation is calculated by taking the arctangent of the second row.
   // This provides the rotation in radians. The added 2*PI is to ensure a positive angle.
-  const rotation = Math.atan2(b, a) + 2 * Math.PI;
+  const rotation = (Math.atan2(b, a) + 2 * Math.PI) % (2 * Math.PI);
   const scaleX = Math.sqrt(a * a + b * b);
   const scaleY = Math.sqrt(c * c + d * d);
 
@@ -224,17 +225,21 @@ export function getTransformAndShapeProperties(
     .getAttribute("ItemTransform")!
     .split(" ")
     .map(parseFloat);
-  const pageGeometricBounds = page
-    .getAttribute("GeometricBounds")!
-    .split(" ")
-    .map(parseFloat) as [y1: number, x1: number, y2: number, x2: number];
+  // const toPagePosition = (x: number, y: number) => ({
+  //   x: x - pageItemTransform[4],
+  //   y: y - pageItemTransform[5],
+  // });
+  const pageOffsetX = pageItemTransform[4];
+  const pageOffsetY = pageItemTransform[5];
+  // const pageGeometricBounds = page
+  //   .getAttribute("GeometricBounds")!
+  //   .split(" ")
+  //   .map(parseFloat) as [y1: number, x1: number, y2: number, x2: number];
   // Get the 2x3 transformation matrix of the element
   const elementItemTransform = element
     .getAttribute("ItemTransform")!
     .split(" ")
     .map(parseFloat);
-  // Get the path geometry of the element.
-  const elementPathGeometry = element.querySelector("PathGeometry")!;
 
   // Extracts the transformations and dimensions.
   const pageTransform = parseTransformMatrix(pageItemTransform);
@@ -260,22 +265,12 @@ export function getTransformAndShapeProperties(
     ...allTransforms,
     ...additionalTransforms,
     elementItemTransform,
-  ].reduce(
-    (acc, transform) => {
-      const [a, b, c, d, e, f] = transform;
-      const [a1, b1, c1, d1, e1, f1] = acc;
-      return [
-        a * a1 + b * c1,
-        a * b1 + b * d1,
-        c * a1 + d * c1,
-        c * b1 + d * d1,
-        e * a1 + f * c1 + e1,
-        e * b1 + f * d1 + f1,
-      ];
-    },
-    // start with empty transform
-    [1, 0, 0, 1, 0, 0]
-  );
+  ];
+  const combinedTransformMatrix = multiplyItemTransforms([
+    // pageItemTransform,
+    ...allTransforms,
+    elementItemTransform,
+  ]);
   // parseTransformMatrix(elementItemTransform)
   // Apply the combined transform to the page transform
   console.log({
@@ -284,7 +279,10 @@ export function getTransformAndShapeProperties(
     ancestors: ancestors.map((ancestor) => ancestor.tagName),
   });
 
-  const elementTransform = parseTransformMatrix(combinedTransform);
+  const elementTransform = parseTransformMatrix(combinedTransformMatrix);
+
+  // Get the path geometry of the element.
+  const elementPathGeometry = element.querySelector("PathGeometry")!;
   const shapeGeometry = parsePathGeometry(elementPathGeometry);
 
   // Calculates offsets between the page and the shape.
@@ -295,8 +293,18 @@ export function getTransformAndShapeProperties(
 
   // Adjusts the element's transformation for the offsets.
   // This makes the element's position relative to the page.
-  const elementX = elementTransform.x - xOffset;
-  const elementY = elementTransform.y - yOffset;
+  const leftUpperPoint = transformPoint(
+    combinedTransformMatrix,
+    shapeGeometry.x,
+    shapeGeometry.y
+  );
+  //Page example: GeometricBounds="-36.5 -25 109.5 175" ItemTransform="1 0 0 1 -75 -36.5"
+  const geometricBounds = page
+    .getAttribute("GeometricBounds")
+    ?.split(" ")
+    .map(parseFloat) as [number, number, number, number];
+  const elementX = leftUpperPoint.x - pageOffsetX - geometricBounds[1];
+  const elementY = leftUpperPoint.y - pageOffsetY - geometricBounds[0];
 
   // Calculates the new coordinates of the shape's center after rotation. The "centerX" and "centerY" variables
   // are the result of applying the rotation matrix to the original center coordinates of the shape.
@@ -311,10 +319,21 @@ export function getTransformAndShapeProperties(
   // Adjusts the unrotated element's position by adding the "rotatedX" and "rotatedY". These additions take into account
   // the changes in the position of the shape's center due to rotation. The results are the final coordinates of the shape
   // after rotation has been applied.
-  const x = elementX + centerX - shapeGeometry.centerX - pageGeometricBounds[1];
-  const y = elementY + centerY - shapeGeometry.centerY - pageGeometricBounds[0];
+  const x = elementX; // + pageOffsetX;
+  const y = elementY; // + pageOffsetY;
   const width = shapeGeometry.width * elementTransform.scaleX;
   const height = shapeGeometry.height * elementTransform.scaleY;
+
+  console.log({
+    leftUpperPoint,
+    name: element.getAttribute("Name"),
+    elementTransform,
+    pageTransform,
+    x,
+    y,
+    width,
+    height,
+  });
 
   return {
     ...shapeGeometry,

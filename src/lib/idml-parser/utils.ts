@@ -9,6 +9,7 @@ import { WEIGHT_ALIAS_MAP } from "./font-resolver";
 import { Logger } from "./logger";
 import type { Gradient, IDML, Vector2 } from "./types";
 import { Matrix, multiplyItemTransforms, transformPoint } from "./transforms";
+import CreativeEngine from "@cesdk/engine";
 /**
  * Extracts the contents of an IDML file into a map of filenames to XML documents
  *
@@ -683,29 +684,34 @@ function getChildByTagName(parent: Element, tagName: string): Element | null {
   const child = children.find((child) => child.tagName === tagName);
   return child ?? null;
 }
-
-export function createShapeFromElement(
+/**
+ * Gets the IDML ID of a block
+ * @param engine The CreativeEngine instance
+ * @param id The IDML ID to search for
+ * @returns The block ID or undefined if not found
+ */
+export function getBlockByIDMLId(
   engine: CreativeEngine,
-  element: Element
-) {
-  this.engine.block.setKind(block, "shape");
-  const shape = this.engine.block.createShape("//ly.img.ubq/shape/vector_path");
-  this.engine.block.setShape(block, shape);
+  id: string
+): number | undefined {
+  const block = engine.block
+    .findAll()
+    .filter((block) => engine.block.hasMetadata(block, "idml/id"))
+    .find((block) => engine.block.getMetadata(block, "idml/id") === id);
 
-  // Set the vector path's path data, width, and height
-  this.engine.block.setString(
-    shape,
-    "vector_path/path",
-    polygonAttributes.pathData
-  );
-  this.engine.block.setFloat(
-    shape,
-    "vector_path/width",
-    polygonAttributes.width
-  );
-  this.engine.block.setFloat(
-    shape,
-    "vector_path/height",
-    polygonAttributes.height
-  );
+  return block;
+}
+
+/**
+ * Sets the IDML ID of a block
+ * @param engine The CreativeEngine instance
+ * @param block The block ID to set the IDML ID for
+ * @param id The IDML ID to set
+ */
+export function setBlockIDMLId(
+  engine: CreativeEngine,
+  block: number,
+  id: string
+): void {
+  engine.block.setMetadata(block, "idml/id", id);
 }

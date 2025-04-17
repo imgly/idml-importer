@@ -317,22 +317,13 @@ export class IDMLParser {
           case SPREAD_ELEMENTS.RECTANGLE:
           case SPREAD_ELEMENTS.POLYGON:
           case SPREAD_ELEMENTS.OVAL: {
-            // if we have a <Image> element child or <SVG> element child, get it
-            // const imageElement = element.querySelector("Image");
-            // const svgElement = element.querySelector("SVG");
-            // Get the rectangle's transform and dimensions
             const shapeAttributes = getTransformAndShapeProperties(
-              // imageElement ?? svgElement ?? element,
               element,
               spread
             );
 
-            let block: number;
+            const block = this.engine.block.create("//ly.img.ubq/graphic");
 
-            // If the rectangle has an image URI, create an image block
-            block = this.engine.block.create("//ly.img.ubq/graphic");
-
-            // if polygon:
             let shape: number;
             if (element.tagName === SPREAD_ELEMENTS.POLYGON) {
               this.engine.block.setKind(block, "shape");
@@ -369,26 +360,8 @@ export class IDMLParser {
             }
             this.engine.block.setShape(block, shape);
 
-            // TODO: Maybe "image"?
-            this.engine.block.setKind(block, "shape");
-
             this.applyStroke(block, element);
             this.applyTransparency(block, element);
-
-            // set red color fill for testing:
-            // this.engine.block.setFillEnabled(block, true);
-            const fill = this.engine.block.createFill("color");
-            this.engine.block.setColor(fill, "fill/color/value", {
-              r: 1,
-              g: 0,
-              b: 0,
-              a: 0.3,
-            });
-            this.engine.block.setFill(block, fill);
-            // add stroke for visibility
-            this.engine.block.setStrokeEnabled(block, true);
-            this.engine.block.setStrokeColor(block, { r: 0, b: 1, g: 0, a: 1 });
-            this.engine.block.setStrokeWidth(block, 0.01);
 
             this.engine.block.appendChild(pageBlock, block);
 
@@ -414,63 +387,18 @@ export class IDMLParser {
               this.engine.block.setPositionX(block, x / POINT_TO_INCH);
               this.engine.block.setPositionY(block, y / POINT_TO_INCH);
             };
-            console.log("b1", block, shapeAttributes);
             applyLayout(block, shapeAttributes);
-
-            // await this.applyImageFill(block, element);
-
-            let innerImageBlock: number | null = null;
-            const imageElement =
-              element.getElementsByTagName("Image")[0] ??
-              element.getElementsByTagName("SVG")[0] ??
-              element.getElementsByTagName("PDF")[0] ??
-              element.getElementsByTagName("EPS")[0];
             // if this is an image, create another image but include the item transform
-            if (imageElement) {
-              innerImageBlock = this.engine.block.create(
-                "//ly.img.ubq/graphic"
-              );
-              // copy shape
-              // const shapeInner = this.engine.block.duplicate(shape);
-              const shapeInner = this.engine.block.createShape(
-                "//ly.img.ubq/shape/rect"
-              );
-              this.engine.block.setShape(innerImageBlock, shapeInner);
-              await this.applyImageFill(innerImageBlock, element);
-              //append
-              this.engine.block.appendChild(pageBlock, innerImageBlock);
-              // add red stroke:
-              this.engine.block.setStrokeEnabled(innerImageBlock, true);
-              this.engine.block.setStrokeColor(innerImageBlock, {
-                r: 0,
-                b: 0,
-                g: 1,
-                a: 1,
-              });
-              if (!imageElement) {
-                throw new Error("No image element found" + element.outerHTML);
-              }
-              const imageItemTransform = imageElement
-                .getAttribute("ItemTransform")!
-                .split(" ")
-                .map(parseFloat);
-              const imageShapeAttributes = getTransformAndShapeProperties(
-                element,
-                spread
-                // [imageItemTransform]
-              );
-              applyLayout(innerImageBlock, imageShapeAttributes);
-            }
+            const hasImageFill = await this.applyImageFill(block, element);
 
-            if (this.engine.block.getKind(block) === "shape") {
+            if (!hasImageFill) {
               // Fill needs to be applied after setting height and width, because gradient fills need the dimensions
               this.applyFill(block, element);
-              this.applyBorderRadius(block, element);
             }
+            this.applyBorderRadius(block, element);
 
             this.copyElementName(element, block);
-            // return [innerImageBlock];
-            return innerImageBlock ? [block, innerImageBlock] : [block];
+            return [block];
           }
 
           case SPREAD_ELEMENTS.GRAPHIC_LINE: {
@@ -536,18 +464,6 @@ export class IDMLParser {
             const parentStoryId = element.getAttribute("ParentStory");
             const parentStory = this.idml[`Stories/Story_${parentStoryId}.xml`];
 
-            // Log out a warning if a story (text) has multiple text frames.
-            // The CE.SDK does not support overflowing text between multiple text frames.
-            const hasOtherFrames =
-              element.getAttribute("PreviousTextFrame") !== "n" ||
-              element.getAttribute("NextTextFrame") !== "n";
-
-            if (hasOtherFrames) {
-              this.logger.log(
-                `Story with ID ${parentStoryId} has multiple text frames. This is currently not supported and might lead to text duplication.`,
-                "warning"
-              );
-            }
             // Create a text block
             const block = this.engine.block.create("//ly.img.ubq/text");
 
@@ -1045,11 +961,14 @@ export class IDMLParser {
    * Parses the image fill of an IDML element and applies it to a CESDK block
    * @param block The CESDK block to apply the image fill to
    * @param element The IDML element
-   * @returns void
+   * @returns Promise<boolean> True if the image fill was applied, false otherwise
    */
-  private async applyImageFill(block: number, element: Element) {
+  private async applyImageFill(
+    block: number,
+    element: Element
+  ): Promise<boolean> {
     const imageURI = getImageURI(element, this.logger);
-    if (!imageURI) return;
+    if (!imageURI) return false;
 
     const fill = this.engine.block.createFill("image");
     this.engine.block.setSourceSet(fill, "fill/image/sourceSet", []);
@@ -1086,6 +1005,7 @@ export class IDMLParser {
         this.engine.block.setContentFillMode(block, "Contain");
       }
     }
+    return true;
   }
 
   /**

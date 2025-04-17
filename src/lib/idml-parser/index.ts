@@ -1,5 +1,5 @@
 import type CreativeEngine from "@cesdk/engine";
-import type { Font, RGBAColor } from "@cesdk/engine";
+import type { Color, Font } from "@cesdk/engine";
 import {
   calculateSplitIndices,
   getTextFramesWithBlocks,
@@ -52,7 +52,7 @@ export class IDMLParser {
   // A function that resolves the font URI from the font name and style
   private fontResolver: TypefaceResolver;
   // A map of the colors used in the IDML document and their RGBA values
-  private colors: Map<string, RGBAColor>;
+  private colors: Map<string, Color>;
   // A map of the gradients used in the IDML document and their GradientColorStop values
   private gradients: Map<string, Gradient>;
   private spreads: Document[];
@@ -694,44 +694,18 @@ export class IDMLParser {
             this.engine.block.setPositionX(block, x);
             this.engine.block.setPositionY(block, y);
 
-            let backgroundBlock: number | null = null;
-            // If the text frame has a fill color, we create a rectangle block to use as the background
-            if (element.getAttribute("FillColor")) {
-              backgroundBlock = this.engine.block.create(
-                "//ly.img.ubq/graphic"
-              );
-              this.engine.block.setKind(backgroundBlock, "shape");
-              const shape = this.engine.block.createShape(
-                "//ly.img.ubq/shape/rect"
-              );
-              this.engine.block.setShape(backgroundBlock, shape);
+            const fillColor = element.getAttribute("FillColor");
+            const rgba = this.colors.get(fillColor!);
 
-              this.engine.block.appendChild(pageBlock, backgroundBlock);
-              this.engine.block.setWidth(backgroundBlock, width);
-              this.engine.block.setHeight(backgroundBlock, height);
-              this.engine.block.setRotation(
-                backgroundBlock,
-                textFrameAttributes.rotation
-              );
-              this.engine.block.setPositionX(backgroundBlock, x);
-              this.engine.block.setPositionY(backgroundBlock, y);
-
-              this.applyFill(backgroundBlock, element);
+            if (rgba) {
+              this.engine.block.setBool(block, "backgroundColor/enabled", true);
+              this.engine.block.setColor(block, "backgroundColor/color", rgba);
             }
-            // todo remove
-            // add stroke for debug
-            // this.engine.block.setStrokeEnabled(block, true);
-            // this.engine.block.setStrokeColor(block, {
-            //   r: 0,
-            //   b: 1,
-            //   g: 0,
-            //   a: 1,
-            // });
 
             this.engine.block.appendChild(pageBlock, block);
 
             this.copyElementName(element, block);
-            return backgroundBlock ? [block, backgroundBlock] : [block];
+            return [block];
           }
 
           case SPREAD_ELEMENTS.GROUP: {

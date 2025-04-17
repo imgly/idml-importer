@@ -1,5 +1,6 @@
 import type {
   CMYKColor,
+  Color,
   Font,
   GradientColorStop,
   RGBAColor,
@@ -394,19 +395,17 @@ export function extractColors(graphicResources: Document) {
       // Get the color value
       const colorValue = colorTag.getAttribute("ColorValue")!;
 
-      // If it's a CMYK color, convert it to RGBA
+      // If it's a CMYK color, return it as CMYK
       if (space === "CMYK") {
         const CMYK = colorValue.split(" ").map(parseFloat);
-        return [
-          key,
-          CMYKtoRGBA({
-            c: CMYK[0],
-            m: CMYK[1],
-            y: CMYK[2],
-            k: CMYK[3],
-            tint: 1,
-          }),
-        ];
+        const color: CMYKColor = {
+          c: CMYK[0] / 100,
+          m: CMYK[1] / 100,
+          y: CMYK[2] / 100,
+          k: CMYK[3] / 100,
+          tint: 1,
+        };
+        return [key, color];
       }
 
       // If it's an RGB color, convert it to RGBA and normalize the values
@@ -446,7 +445,7 @@ export function extractColors(graphicResources: Document) {
  */
 export function extractGradients(
   graphicResources: Document,
-  colors: Map<string, RGBAColor>
+  colors: Map<string, Color>
 ): Map<string, Gradient> {
   return new Map(
     Array.from(graphicResources.querySelectorAll("Gradient")).map(
@@ -497,8 +496,8 @@ export function extractGradients(
  */
 function getGradientStopColor(
   gradientStop: Element,
-  colors: Map<string, RGBAColor>
-): RGBAColor {
+  colors: Map<string, Color>
+): Color {
   const color = gradientStop.getAttribute("StopColor")!;
   const colorValue = colors.get(color);
   if (colorValue) {
@@ -519,7 +518,7 @@ function getGradientStopColor(
  * @param CMYK The CMYK color to convert
  * @returns The RGBA color
  */
-export function CMYKtoRGBA(CMYK: CMYKColor): RGBAColor {
+export function CMYKtoRGBA(CMYK: CMYKColor): Color {
   // Normalize the input color components to the range of [0,1]
   const c = CMYK.c / 100;
   const m = CMYK.m / 100;

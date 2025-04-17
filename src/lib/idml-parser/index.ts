@@ -443,7 +443,7 @@ export class IDMLParser {
               const height = parseFloat(strokeWeight) / POINT_TO_INCH;
               this.engine.block.setHeight(block, height);
             } else {
-              console.warn("No stroke weight found for line");
+              this.logger.log("No stroke weight found for line", "warning");
             }
             // Convert the line's dimensions from points to the CESDK design unit
             const x = lineAttributes.x / POINT_TO_INCH;
@@ -561,9 +561,7 @@ export class IDMLParser {
                 }
 
                 // get the text segment font size
-                const fontSize =
-                  range.getAttribute("PointSize") ??
-                  appliedParagraphStyle?.getAttribute("PointSize");
+                const fontSize = getAttribute("PointSize");
 
                 if (fontSize) {
                   this.engine.block.setTextFontSize(
@@ -573,11 +571,8 @@ export class IDMLParser {
                     end
                   );
                 }
-
                 // get the text segment case
-                const capitalization =
-                  range.getAttribute("Capitalization") ??
-                  appliedParagraphStyle?.getAttribute("Capitalization");
+                const capitalization = getAttribute("Capitalization");
                 switch (capitalization) {
                   case "AllCaps":
                     this.engine.block.setTextCase(
@@ -592,13 +587,13 @@ export class IDMLParser {
                 // get the text segment font family and style
                 const fontFamily =
                   range.querySelector("AppliedFont")?.innerHTML ??
+                  appliedCharacterStyle?.querySelector("AppliedFont")
+                    ?.innerHTML ??
                   appliedParagraphStyle?.querySelector("AppliedFont")
                     ?.innerHTML ??
                   "Roboto";
                 const { style, weight } = parseFontStyleString(
-                  range.getAttribute("FontStyle") ??
-                    appliedParagraphStyle?.getAttribute("FontStyle") ??
-                    ""
+                  getAttribute("FontStyle") ?? ""
                 );
                 font = {
                   family: fontFamily,
@@ -770,7 +765,6 @@ export class IDMLParser {
     // Reorder the blocks into the correct order
     // Children are sorted in their rendering order: Last child is rendered in front of other children.
     const flatBlocks = blocks.flat().filter((block) => block !== null);
-    console.log("flatBlocks", { flatBlocks, blocks });
     for (let index = 0; index < flatBlocks.length; index++) {
       const block = flatBlocks[index];
       this.engine.block.insertChild(pageBlock, block, index);

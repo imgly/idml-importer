@@ -394,8 +394,8 @@ export class IDMLParser {
             if (!hasImageFill) {
               // Fill needs to be applied after setting height and width, because gradient fills need the dimensions
               this.applyFill(block, element);
+              this.applyBorderRadius(block, element);
             }
-            this.applyBorderRadius(block, element);
 
             this.copyElementName(element, block);
             return [block];

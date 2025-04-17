@@ -177,9 +177,7 @@ export class IDMLParser {
     const stack = this.engine.block.findByType("//ly.img.ubq/stack")[0];
 
     const bleedMargin = this.getBleedMargins();
-    const hasBleedMargin = Object.values(bleedMargin).some(
-      (margin) => margin !== 0
-    );
+    const hasBleedMargin = false; // Currently, the extracted bleed margins are not correct. We do not import them.
 
     // iterate over the spreads and generate a page block for each spread
     const pagePromises = this.spreads.map(async (spread) => {

@@ -277,8 +277,13 @@ export class IDMLParser {
           fullText,
           splitIndices,
           (blockId, startIndex, endIndex) => {
-            this.engine.block.replaceText(blockId, "", endIndex);
-            this.engine.block.replaceText(blockId, "", 0, startIndex);
+            const rangesToRemove = [
+              { start: endIndex, end: fullText.length - 1 },
+              { start: 0, end: startIndex },
+            ].filter(({ start, end }) => start < end);
+            rangesToRemove.forEach(({ start, end }) => {
+              this.engine.block.replaceText(blockId, "", start, end);
+            });
           }
         );
 

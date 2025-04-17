@@ -1,5 +1,11 @@
 import type CreativeEngine from "@cesdk/engine";
 import type { Font, RGBAColor } from "@cesdk/engine";
+import {
+  calculateSplitIndices,
+  getTextFramesWithBlocks,
+  orderTextFrames,
+  updateFrameContents,
+} from "./features/split-text-frames";
 import type { TypefaceResolver } from "./font-resolver";
 import defaultFontResolver from "./font-resolver";
 import { Logger } from "./logger";
@@ -8,14 +14,15 @@ import {
   angleToGradientControlPoints,
   extractColors,
   extractGradients,
+  getBlockByIDMLId,
   getImageURI,
   getPageAttributes,
   getTransformAndShapeProperties,
   parseFontStyleString,
   replaceSpecialCharacters,
+  setBlockIDMLId,
   unzipIdmlFile,
 } from "./utils";
-import { image } from "@milkdown/preset-commonmark";
 
 // The design unit used in the CESDK Editor
 const DESIGN_UNIT = "Inch";
@@ -224,9 +231,62 @@ export class IDMLParser {
       // Render the page elements and append them to the page block
       await this.renderPageElements(spreadElement, page, pageBlock);
 
+      // Feature: Break up TextFrame Stories
+      this.processMultiFrameStories(spreadElement);
+
       return pageBlock;
     });
     return Promise.all(pagePromises);
+  }
+
+  private processMultiFrameStories(spreadElement: Element) {
+    const allFrames = Array.from(
+      spreadElement.getElementsByTagName(SPREAD_ELEMENTS.TEXT_FRAME)
+    );
+    const storiesMap = allFrames.reduce((acc, tf) => {
+      const storyId = tf.getAttribute("ParentStory");
+      if (storyId) (acc[storyId] ??= []).push(tf);
+      return acc;
+    }, {} as Record<string, Element[]>);
+
+    // 2. Process multi-frame stories
+    Object.entries(storiesMap)
+      .filter(([_, tfs]) => tfs.length > 1)
+      .forEach(([storyId, storyFrames]) => {
+        const orderedFrames = orderTextFrames(storyFrames);
+        if (!orderedFrames || orderedFrames.length < 2) return; // Skip if ordering failed or too few frames
+
+        // Pass the actual function implementations needed by the helpers
+        const framesWithBlocks = getTextFramesWithBlocks(orderedFrames, (id) =>
+          getBlockByIDMLId(this.engine, id)
+        );
+        if (framesWithBlocks.length < 2) return; // Skip if insufficient usable blocks
+
+        const firstBlock = framesWithBlocks[0].block;
+        const fullText =
+          this.engine.block.getString(firstBlock, "text/text") || "";
+        if (fullText.length === 0) return; // Skip empty stories
+
+        const splitIndices = calculateSplitIndices(
+          fullText,
+          framesWithBlocks.length
+        );
+
+        updateFrameContents(
+          framesWithBlocks,
+          fullText,
+          splitIndices,
+          (blockId, startIndex, endIndex) => {
+            this.engine.block.replaceText(blockId, "", endIndex);
+            this.engine.block.replaceText(blockId, "", 0, startIndex);
+          }
+        );
+
+        this.logger.log(
+          "A story that spanned multiple text frames was split into multiple text blocks.",
+          "info"
+        );
+      });
   }
 
   /**
@@ -809,6 +869,11 @@ export class IDMLParser {
       block,
       element.getAttribute("Name")?.replace("$ID/", "") ?? ""
     );
+    // Also set metadata for the block based on the ID
+    const id = element.getAttribute("Self");
+    if (id) {
+      setBlockIDMLId(this.engine, block, id);
+    }
   }
 
   /**

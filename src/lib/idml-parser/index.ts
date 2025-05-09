@@ -1,5 +1,11 @@
 import type CreativeEngine from "@cesdk/engine";
-import type { Font, RGBAColor } from "@cesdk/engine";
+import type { Color, Font } from "@cesdk/engine";
+import {
+  calculateSplitIndices,
+  getTextFramesWithBlocks,
+  orderTextFrames,
+  updateFrameContents,
+} from "./features/split-text-frames";
 import type { TypefaceResolver } from "./font-resolver";
 import defaultFontResolver from "./font-resolver";
 import { Logger } from "./logger";
@@ -8,21 +14,22 @@ import {
   angleToGradientControlPoints,
   extractColors,
   extractGradients,
+  getBlockByIDMLId,
   getImageURI,
   getPageAttributes,
   getTransformAndShapeProperties,
   parseFontStyleString,
   replaceSpecialCharacters,
+  setBlockIDMLId,
   unzipIdmlFile,
 } from "./utils";
 
 // The design unit used in the CESDK Editor
 const DESIGN_UNIT = "Inch";
-/**
- * The pixel scale factor used in the CESDK Editor
- * This is used to convert the IDML file's pixel values to CESDK's design unit
- */
-const PIXEL_SCALE_FACTOR = 72;
+// "The units used by the pasteboard coordinate system are points, defined as 72 units per inch.
+// Changing the definition of points in the In­ Design user interface has no effect on the definition
+// of points used in IDML."
+const POINT_TO_INCH = 72;
 const DEFAULT_FONT_NAME = "Roboto";
 
 // Element types of the spreads in the IDML file
@@ -45,7 +52,7 @@ export class IDMLParser {
   // A function that resolves the font URI from the font name and style
   private fontResolver: TypefaceResolver;
   // A map of the colors used in the IDML document and their RGBA values
-  private colors: Map<string, RGBAColor>;
+  private colors: Map<string, Color>;
   // A map of the gradients used in the IDML document and their GradientColorStop values
   private gradients: Map<string, Gradient>;
   private spreads: Document[];
@@ -84,20 +91,16 @@ export class IDMLParser {
     this.engine.block.setBool(stack, "stack/spacingInScreenspace", true);
 
     this.engine.scene.setDesignUnit(DESIGN_UNIT);
-    this.engine.block.setFloat(
-      this.scene,
-      "scene/pixelScaleFactor",
-      PIXEL_SCALE_FACTOR
-    );
+    this.engine.block.setInt(this.scene, "scene/dpi", POINT_TO_INCH);
     this.engine.block.setFloat(
       this.scene,
       "scene/pageDimensions/width",
-      width / PIXEL_SCALE_FACTOR
+      width / POINT_TO_INCH
     );
     this.engine.block.setFloat(
       this.scene,
       "scene/pageDimensions/height",
-      height / PIXEL_SCALE_FACTOR
+      height / POINT_TO_INCH
     );
     this.engine.editor;
   }
@@ -152,19 +155,19 @@ export class IDMLParser {
     const bleedMargins = {
       top:
         parseFloat(documentPreference.getAttribute("DocumentBleedTopOffset")!) /
-        PIXEL_SCALE_FACTOR,
+        POINT_TO_INCH,
       bottom:
         parseFloat(
           documentPreference.getAttribute("DocumentBleedBottomOffset")!
-        ) / PIXEL_SCALE_FACTOR,
+        ) / POINT_TO_INCH,
       left:
         parseFloat(
           documentPreference.getAttribute("DocumentBleedInsideOrLeftOffset")!
-        ) / PIXEL_SCALE_FACTOR,
+        ) / POINT_TO_INCH,
       right:
         parseFloat(
           documentPreference.getAttribute("DocumentBleedOutsideOrRightOffset")!
-        ) / PIXEL_SCALE_FACTOR,
+        ) / POINT_TO_INCH,
     };
     return bleedMargins;
   }
@@ -174,9 +177,7 @@ export class IDMLParser {
     const stack = this.engine.block.findByType("//ly.img.ubq/stack")[0];
 
     const bleedMargin = this.getBleedMargins();
-    const hasBleedMargin = Object.values(bleedMargin).some(
-      (margin) => margin !== 0
-    );
+    const hasBleedMargin = false; // Currently, the extracted bleed margins are not correct. We do not import them.
 
     // iterate over the spreads and generate a page block for each spread
     const pagePromises = this.spreads.map(async (spread) => {
@@ -191,8 +192,8 @@ export class IDMLParser {
       const pageBlock = this.engine.block.create("//ly.img.ubq/page");
 
       // Convert the page dimensions from points to the CESDK design unit
-      const width = pageAttributes.width / PIXEL_SCALE_FACTOR;
-      const height = pageAttributes.height / PIXEL_SCALE_FACTOR;
+      const width = pageAttributes.width / POINT_TO_INCH;
+      const height = pageAttributes.height / POINT_TO_INCH;
 
       // Set the page name, width, and height
       this.engine.block.setName(pageBlock, pageAttributes.name);
@@ -228,9 +229,67 @@ export class IDMLParser {
       // Render the page elements and append them to the page block
       await this.renderPageElements(spreadElement, page, pageBlock);
 
+      // Feature: Break up TextFrame Stories
+      this.processMultiFrameStories(spreadElement);
+
       return pageBlock;
     });
     return Promise.all(pagePromises);
+  }
+
+  private processMultiFrameStories(spreadElement: Element) {
+    const allFrames = Array.from(
+      spreadElement.getElementsByTagName(SPREAD_ELEMENTS.TEXT_FRAME)
+    );
+    const storiesMap = allFrames.reduce((acc, tf) => {
+      const storyId = tf.getAttribute("ParentStory");
+      if (storyId) (acc[storyId] ??= []).push(tf);
+      return acc;
+    }, {} as Record<string, Element[]>);
+
+    // 2. Process multi-frame stories
+    Object.entries(storiesMap)
+      .filter(([_, tfs]) => tfs.length > 1)
+      .forEach(([storyId, storyFrames]) => {
+        const orderedFrames = orderTextFrames(storyFrames);
+        if (!orderedFrames || orderedFrames.length < 2) return; // Skip if ordering failed or too few frames
+
+        // Pass the actual function implementations needed by the helpers
+        const framesWithBlocks = getTextFramesWithBlocks(orderedFrames, (id) =>
+          getBlockByIDMLId(this.engine, id)
+        );
+        if (framesWithBlocks.length < 2) return; // Skip if insufficient usable blocks
+
+        const firstBlock = framesWithBlocks[0].block;
+        const fullText =
+          this.engine.block.getString(firstBlock, "text/text") || "";
+        if (fullText.length === 0) return; // Skip empty stories
+
+        const splitIndices = calculateSplitIndices(
+          fullText,
+          framesWithBlocks.length
+        );
+
+        updateFrameContents(
+          framesWithBlocks,
+          fullText,
+          splitIndices,
+          (blockId, startIndex, endIndex) => {
+            const rangesToRemove = [
+              { start: endIndex, end: fullText.length - 1 },
+              { start: 0, end: startIndex },
+            ].filter(({ start, end }) => start < end);
+            rangesToRemove.forEach(({ start, end }) => {
+              this.engine.block.replaceText(blockId, "", start, end);
+            });
+          }
+        );
+
+        this.logger.log(
+          "A story that spanned multiple text frames was split into multiple text blocks.",
+          "info"
+        );
+      });
   }
 
   /**
@@ -253,139 +312,88 @@ export class IDMLParser {
         if (!visible) return [];
         // Render the CESDK block based on the element type
         switch (element.tagName) {
-          case SPREAD_ELEMENTS.RECTANGLE: {
-            // Get the rectangle's transform and dimensions
-            const rectAttributes = getTransformAndShapeProperties(
+          case SPREAD_ELEMENTS.RECTANGLE:
+          case SPREAD_ELEMENTS.POLYGON:
+          case SPREAD_ELEMENTS.OVAL: {
+            const shapeAttributes = getTransformAndShapeProperties(
               element,
               spread
             );
 
-            let block: number;
+            const block = this.engine.block.create("//ly.img.ubq/graphic");
 
-            // If the rectangle has an image URI, create an image block
-            block = this.engine.block.create("//ly.img.ubq/graphic");
-            const shape = this.engine.block.createShape(
-              "//ly.img.ubq/shape/rect"
-            );
+            let shape: number;
+            if (element.tagName === SPREAD_ELEMENTS.POLYGON) {
+              this.engine.block.setKind(block, "shape");
+              shape = this.engine.block.createShape(
+                "//ly.img.ubq/shape/vector_path"
+              );
+
+              // Set the vector path's path data, width, and height
+              this.engine.block.setString(
+                shape,
+                "vector_path/path",
+                shapeAttributes.pathData
+              );
+              this.engine.block.setFloat(
+                shape,
+                "vector_path/width",
+                shapeAttributes.width
+              );
+              this.engine.block.setFloat(
+                shape,
+                "vector_path/height",
+                shapeAttributes.height
+              );
+            } else if (element.tagName === SPREAD_ELEMENTS.OVAL) {
+              // if the element is an oval, we need to set the shape to a circle
+              shape = this.engine.block.createShape(
+                "//ly.img.ubq/shape/ellipse"
+              );
+            } else if (element.tagName === SPREAD_ELEMENTS.RECTANGLE) {
+              // if the element is a rectangle, we need to set the shape to a rectangle
+              shape = this.engine.block.createShape("//ly.img.ubq/shape/rect");
+            } else {
+              throw new Error("Unknown shape type");
+            }
             this.engine.block.setShape(block, shape);
-            this.engine.block.setKind(block, "shape");
 
-            await this.applyImageFill(block, element);
             this.applyStroke(block, element);
             this.applyTransparency(block, element);
 
             this.engine.block.appendChild(pageBlock, block);
 
-            // Convert the rectangle's dimensions from points to the CESDK design unit
-            const x = rectAttributes.x / PIXEL_SCALE_FACTOR;
-            const y = rectAttributes.y / PIXEL_SCALE_FACTOR;
-            const width = rectAttributes.width / PIXEL_SCALE_FACTOR;
-            const height = rectAttributes.height / PIXEL_SCALE_FACTOR;
+            const applyLayout = (
+              block: number,
+              {
+                x,
+                y,
+                width,
+                height,
+                rotation,
+              }: {
+                x: number;
+                y: number;
+                width: number;
+                height: number;
+                rotation: number;
+              }
+            ) => {
+              this.engine.block.setWidth(block, width / POINT_TO_INCH);
+              this.engine.block.setHeight(block, height / POINT_TO_INCH);
+              this.engine.block.setRotation(block, rotation);
+              this.engine.block.setPositionX(block, x / POINT_TO_INCH);
+              this.engine.block.setPositionY(block, y / POINT_TO_INCH);
+            };
+            applyLayout(block, shapeAttributes);
+            // if this is an image, create another image but include the item transform
+            const hasImageFill = await this.applyImageFill(block, element);
 
-            this.engine.block.setPositionX(block, x);
-            this.engine.block.setPositionY(block, y);
-            this.engine.block.setWidth(block, width);
-            this.engine.block.setHeight(block, height);
-            this.engine.block.setRotation(block, rectAttributes.rotation);
-
-            if (this.engine.block.getKind(block) === "shape") {
+            if (!hasImageFill) {
               // Fill needs to be applied after setting height and width, because gradient fills need the dimensions
               this.applyFill(block, element);
               this.applyBorderRadius(block, element);
             }
-
-            this.copyElementName(element, block);
-            return [block];
-          }
-
-          case SPREAD_ELEMENTS.OVAL: {
-            // Get the oval's transform and dimensions
-            const ovalAttributes = getTransformAndShapeProperties(
-              element,
-              spread
-            );
-
-            // Create an ellipse block
-            const block = this.engine.block.create("//ly.img.ubq/graphic");
-            this.engine.block.setKind(block, "shape");
-            const shape = this.engine.block.createShape(
-              "//ly.img.ubq/shape/ellipse"
-            );
-            this.engine.block.setShape(block, shape);
-
-            this.applyFill(block, element);
-            await this.applyImageFill(block, element);
-            this.applyStroke(block, element);
-            this.applyTransparency(block, element);
-
-            this.engine.block.appendChild(pageBlock, block);
-
-            // Convert the oval's dimensions from points to the CESDK design unit
-            const x = ovalAttributes.x / PIXEL_SCALE_FACTOR;
-            const y = ovalAttributes.y / PIXEL_SCALE_FACTOR;
-            const width = ovalAttributes.width / PIXEL_SCALE_FACTOR;
-            const height = ovalAttributes.height / PIXEL_SCALE_FACTOR;
-
-            this.engine.block.setPositionX(block, x);
-            this.engine.block.setPositionY(block, y);
-            this.engine.block.setWidth(block, width);
-            this.engine.block.setHeight(block, height);
-            this.engine.block.setRotation(block, ovalAttributes.rotation);
-
-            this.copyElementName(element, block);
-            return [block];
-          }
-
-          case SPREAD_ELEMENTS.POLYGON: {
-            // Get the polygon's transform and dimensions
-            const polygonAttributes = getTransformAndShapeProperties(
-              element,
-              spread
-            );
-
-            // Create a vector path block
-            const block = this.engine.block.create("//ly.img.ubq/graphic");
-            this.engine.block.setKind(block, "shape");
-            const shape = this.engine.block.createShape(
-              "//ly.img.ubq/shape/vector_path"
-            );
-            this.engine.block.setShape(block, shape);
-
-            // Set the vector path's path data, width, and height
-            this.engine.block.setString(
-              shape,
-              "vector_path/path",
-              polygonAttributes.pathData
-            );
-            this.engine.block.setFloat(
-              shape,
-              "vector_path/width",
-              polygonAttributes.width
-            );
-            this.engine.block.setFloat(
-              shape,
-              "vector_path/height",
-              polygonAttributes.height
-            );
-
-            this.applyFill(block, element);
-            await this.applyImageFill(block, element);
-            this.applyStroke(block, element);
-            this.applyTransparency(block, element);
-
-            this.engine.block.appendChild(pageBlock, block);
-
-            // Convert the polygon's dimensions from points to the CESDK design unit
-            const x = polygonAttributes.x / PIXEL_SCALE_FACTOR;
-            const y = polygonAttributes.y / PIXEL_SCALE_FACTOR;
-            const width = polygonAttributes.width / PIXEL_SCALE_FACTOR;
-            const height = polygonAttributes.height / PIXEL_SCALE_FACTOR;
-
-            this.engine.block.setPositionX(block, x);
-            this.engine.block.setPositionY(block, y);
-            this.engine.block.setWidth(block, width);
-            this.engine.block.setHeight(block, height);
-            this.engine.block.setRotation(block, polygonAttributes.rotation);
 
             this.copyElementName(element, block);
             return [block];
@@ -430,20 +438,20 @@ export class IDMLParser {
 
             // Convert the line's height from points to the CESDK design unit
             if (strokeWeight) {
-              const height = parseFloat(strokeWeight) / PIXEL_SCALE_FACTOR;
+              const height = parseFloat(strokeWeight) / POINT_TO_INCH;
               this.engine.block.setHeight(block, height);
             } else {
-              console.warn("No stroke weight found for line");
+              this.logger.log("No stroke weight found for line", "warning");
             }
             // Convert the line's dimensions from points to the CESDK design unit
-            const x = lineAttributes.x / PIXEL_SCALE_FACTOR;
-            const y = lineAttributes.y / PIXEL_SCALE_FACTOR;
-            const width = lineAttributes.width / PIXEL_SCALE_FACTOR;
+            const x = lineAttributes.x / POINT_TO_INCH;
+            const y = lineAttributes.y / POINT_TO_INCH;
+            const width = lineAttributes.width / POINT_TO_INCH;
 
+            this.engine.block.setRotation(block, lineAttributes.rotation);
+            this.engine.block.setWidth(block, width);
             this.engine.block.setPositionX(block, x);
             this.engine.block.setPositionY(block, y);
-            this.engine.block.setWidth(block, width);
-            this.engine.block.setRotation(block, lineAttributes.rotation);
 
             this.copyElementName(element, block);
             return [block];
@@ -454,18 +462,6 @@ export class IDMLParser {
             const parentStoryId = element.getAttribute("ParentStory");
             const parentStory = this.idml[`Stories/Story_${parentStoryId}.xml`];
 
-            // Log out a warning if a story (text) has multiple text frames.
-            // The CE.SDK does not support overflowing text between multiple text frames.
-            const hasOtherFrames =
-              element.getAttribute("PreviousTextFrame") !== "n" ||
-              element.getAttribute("NextTextFrame") !== "n";
-
-            if (hasOtherFrames) {
-              this.logger.log(
-                `Story with ID ${parentStoryId} has multiple text frames. This is currently not supported and might lead to text duplication.`,
-                "warning"
-              );
-            }
             // Create a text block
             const block = this.engine.block.create("//ly.img.ubq/text");
 
@@ -563,9 +559,7 @@ export class IDMLParser {
                 }
 
                 // get the text segment font size
-                const fontSize =
-                  range.getAttribute("PointSize") ??
-                  appliedParagraphStyle?.getAttribute("PointSize");
+                const fontSize = getAttribute("PointSize");
 
                 if (fontSize) {
                   this.engine.block.setTextFontSize(
@@ -575,11 +569,8 @@ export class IDMLParser {
                     end
                   );
                 }
-
                 // get the text segment case
-                const capitalization =
-                  range.getAttribute("Capitalization") ??
-                  appliedParagraphStyle?.getAttribute("Capitalization");
+                const capitalization = getAttribute("Capitalization");
                 switch (capitalization) {
                   case "AllCaps":
                     this.engine.block.setTextCase(
@@ -594,13 +585,13 @@ export class IDMLParser {
                 // get the text segment font family and style
                 const fontFamily =
                   range.querySelector("AppliedFont")?.innerHTML ??
+                  appliedCharacterStyle?.querySelector("AppliedFont")
+                    ?.innerHTML ??
                   appliedParagraphStyle?.querySelector("AppliedFont")
                     ?.innerHTML ??
                   "Roboto";
                 const { style, weight } = parseFontStyleString(
-                  range.getAttribute("FontStyle") ??
-                    appliedParagraphStyle?.getAttribute("FontStyle") ??
-                    ""
+                  getAttribute("FontStyle") ?? ""
                 );
                 font = {
                   family: fontFamily,
@@ -692,44 +683,29 @@ export class IDMLParser {
             );
 
             // Convert the text frame's dimensions from points to the CESDK design unit
-            const x = textFrameAttributes.x / PIXEL_SCALE_FACTOR;
-            const y = textFrameAttributes.y / PIXEL_SCALE_FACTOR;
-            const width = textFrameAttributes.width / PIXEL_SCALE_FACTOR;
-            const height = textFrameAttributes.height / PIXEL_SCALE_FACTOR;
+            const x = textFrameAttributes.x / POINT_TO_INCH;
+            const y = textFrameAttributes.y / POINT_TO_INCH;
+            const width = textFrameAttributes.width / POINT_TO_INCH;
+            const height = textFrameAttributes.height / POINT_TO_INCH;
 
-            this.engine.block.setPositionX(block, x);
-            this.engine.block.setPositionY(block, y);
             this.engine.block.setWidth(block, width);
             this.engine.block.setHeight(block, height);
             this.engine.block.setRotation(block, textFrameAttributes.rotation);
+            this.engine.block.setPositionX(block, x);
+            this.engine.block.setPositionY(block, y);
 
-            let backgroundBlock: number | null = null;
-            // If the text frame has a fill color, we create a rectangle block to use as the background
-            if (element.getAttribute("FillColor")) {
-              backgroundBlock = this.engine.block.create(
-                "//ly.img.ubq/graphic"
-              );
-              this.engine.block.setKind(backgroundBlock, "shape");
-              const shape = this.engine.block.createShape(
-                "//ly.img.ubq/shape/rect"
-              );
-              this.engine.block.setShape(backgroundBlock, shape);
+            const fillColor = element.getAttribute("FillColor");
+            const rgba = this.colors.get(fillColor!);
 
-              this.engine.block.appendChild(pageBlock, backgroundBlock);
-              this.engine.block.setPositionX(backgroundBlock, x);
-              this.engine.block.setPositionY(backgroundBlock, y);
-              this.engine.block.setWidth(backgroundBlock, width);
-              this.engine.block.setHeight(backgroundBlock, height);
-              this.engine.block.setRotation(
-                backgroundBlock,
-                textFrameAttributes.rotation
-              );
-              this.applyFill(backgroundBlock, element);
+            if (rgba) {
+              this.engine.block.setBool(block, "backgroundColor/enabled", true);
+              this.engine.block.setColor(block, "backgroundColor/color", rgba);
             }
+
             this.engine.block.appendChild(pageBlock, block);
 
             this.copyElementName(element, block);
-            return backgroundBlock ? [block, backgroundBlock] : [block];
+            return [block];
           }
 
           case SPREAD_ELEMENTS.GROUP: {
@@ -780,6 +756,11 @@ export class IDMLParser {
       block,
       element.getAttribute("Name")?.replace("$ID/", "") ?? ""
     );
+    // Also set metadata for the block based on the ID
+    const id = element.getAttribute("Self");
+    if (id) {
+      setBlockIDMLId(this.engine, block, id);
+    }
   }
 
   /**
@@ -898,7 +879,7 @@ export class IDMLParser {
     // from the document colors using the ID and apply the stroke to the block
     if (strokeWeight && strokeColor && this.colors.has(strokeColor)) {
       const rgba = this.colors.get(strokeColor)!;
-      const width = parseFloat(strokeWeight) / PIXEL_SCALE_FACTOR;
+      const width = parseFloat(strokeWeight) / POINT_TO_INCH;
       this.engine.block.setStrokeWidth(block, width);
       this.engine.block.setStrokeColor(block, rgba);
 
@@ -946,49 +927,51 @@ export class IDMLParser {
    * Parses the image fill of an IDML element and applies it to a CESDK block
    * @param block The CESDK block to apply the image fill to
    * @param element The IDML element
-   * @returns void
+   * @returns Promise<boolean> True if the image fill was applied, false otherwise
    */
-  private async applyImageFill(block: number, element: Element) {
+  private async applyImageFill(
+    block: number,
+    element: Element
+  ): Promise<boolean> {
     const imageURI = getImageURI(element, this.logger);
-    if (imageURI) {
-      const fill = this.engine.block.createFill("image");
-      this.engine.block.setSourceSet(fill, "fill/image/sourceSet", []);
-      try {
-        await this.engine.block.addImageFileURIToSourceSet(
-          fill,
-          "fill/image/sourceSet",
-          imageURI
+    if (!imageURI) return false;
+
+    const fill = this.engine.block.createFill("image");
+    this.engine.block.setSourceSet(fill, "fill/image/sourceSet", []);
+    try {
+      await this.engine.block.addImageFileURIToSourceSet(
+        fill,
+        "fill/image/sourceSet",
+        imageURI
+      );
+    } catch (e) {
+      this.logger.log(`Could not load image from URI ${imageURI}`, "error");
+    }
+    this.engine.block.setFill(block, fill);
+    this.engine.block.setKind(block, "image");
+    // Consider FrameFittingOption when setting the content fill mode
+    // If all frame fitting options are negative, this implies that the image is shrunk inside the frame.
+    // Example: FrameFittingOption LeftCrop="-14.222526745057785" TopCrop="-16.089925261496205" RightCrop="-15.077750964903117" BottomCrop="-16.660074738503738" FittingOnEmptyFrame="Proportionally" />
+    // We do not support a crop that makes the image fill smaller than the (graphics block) frame.
+    // We should add a warning and set the content fill to "Contain" in this case.
+    // Fill mode "Contain" will make sure that the image is not cropped and fits the frame.
+    const frameFittingOption = element.querySelector("FrameFittingOption");
+    if (frameFittingOption) {
+      const [leftCrop, topCrop, rightCrop, bottomCrop] = [
+        "LeftCrop",
+        "TopCrop",
+        "RightCrop",
+        "BottomCrop",
+      ].map((crop) => parseFloat(frameFittingOption.getAttribute(crop) ?? "0"));
+      if (leftCrop < 0 && topCrop < 0 && rightCrop < 0 && bottomCrop < 0) {
+        this.logger.log(
+          "The image is shrunk inside the frame using. This is currently not supported and might lead to unexpected results.",
+          "warning"
         );
-      } catch (e) {
-        this.logger.log(`Could not load image from URI ${imageURI}`, "error");
-      }
-      this.engine.block.setFill(block, fill);
-      this.engine.block.setKind(block, "image");
-      // Consider FrameFittingOption when setting the content fill mode
-      // If all frame fitting options are negative, this implies that the image is shrunk inside the frame.
-      // Example: FrameFittingOption LeftCrop="-14.222526745057785" TopCrop="-16.089925261496205" RightCrop="-15.077750964903117" BottomCrop="-16.660074738503738" FittingOnEmptyFrame="Proportionally" />
-      // We do not support a crop that makes the image fill smaller than the (graphics block) frame.
-      // We should add a warning and set the content fill to "Contain" in this case.
-      // Fill mode "Contain" will make sure that the image is not cropped and fits the frame.
-      const frameFittingOption = element.querySelector("FrameFittingOption");
-      if (frameFittingOption) {
-        const [leftCrop, topCrop, rightCrop, bottomCrop] = [
-          "LeftCrop",
-          "TopCrop",
-          "RightCrop",
-          "BottomCrop",
-        ].map((crop) =>
-          parseFloat(frameFittingOption.getAttribute(crop) ?? "0")
-        );
-        if (leftCrop < 0 && topCrop < 0 && rightCrop < 0 && bottomCrop < 0) {
-          this.logger.log(
-            "The image is shrunk inside the frame using. This is currently not supported and might lead to unexpected results.",
-            "warning"
-          );
-          this.engine.block.setContentFillMode(block, "Contain");
-        }
+        this.engine.block.setContentFillMode(block, "Contain");
       }
     }
+    return true;
   }
 
   /**
@@ -1021,7 +1004,7 @@ export class IDMLParser {
 
       const radius =
         parseFloat(element.getAttribute(`${idmlName}CornerRadius`) ?? "0") /
-        PIXEL_SCALE_FACTOR;
+        POINT_TO_INCH;
       if (radius === 0) return;
 
       this.engine.block.setFloat(

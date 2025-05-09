@@ -1,5 +1,6 @@
 import type {
   CMYKColor,
+  Color,
   Font,
   GradientColorStop,
   RGBAColor,
@@ -8,6 +9,8 @@ import JSZip from "jszip";
 import { WEIGHT_ALIAS_MAP } from "./font-resolver";
 import { Logger } from "./logger";
 import type { Gradient, IDML, Vector2 } from "./types";
+import { Matrix, multiplyItemTransforms, transformPoint } from "./transforms";
+import CreativeEngine from "@cesdk/engine";
 /**
  * Extracts the contents of an IDML file into a map of filenames to XML documents
  *
@@ -67,7 +70,7 @@ export function getPageAttributes(page: Element) {
  * @param transform - The 2x3 transformation matrix array.
  * @returns An object with x and y translations and the rotation (in radians).
  */
-function parseTransformMatrix(transform: number[]) {
+function parseTransformMatrix(transform: Matrix) {
   // Destructure the 2x3 matrix elements. The format is [a, b, c, d, e, f], where
   // a and d represent scaling, b and c represent rotation, and e and f represent translation.
   const [a, b, c, d, e, f] = transform;
@@ -78,7 +81,7 @@ function parseTransformMatrix(transform: number[]) {
 
   // The rotation is calculated by taking the arctangent of the second row.
   // This provides the rotation in radians. The added 2*PI is to ensure a positive angle.
-  const rotation = Math.atan2(b, a) + 2 * Math.PI;
+  const rotation = (Math.atan2(b, a) + 2 * Math.PI) % (2 * Math.PI);
   const scaleX = Math.sqrt(a * a + b * b);
   const scaleY = Math.sqrt(c * c + d * d);
 
@@ -222,50 +225,61 @@ export function getTransformAndShapeProperties(
   const pageItemTransform = page
     .getAttribute("ItemTransform")!
     .split(" ")
-    .map(parseFloat);
-  const pageGeometricBounds = page
-    .getAttribute("GeometricBounds")!
-    .split(" ")
-    .map(parseFloat) as [y1: number, x1: number, y2: number, x2: number];
+    .map(parseFloat) as Matrix;
+  const pageOffsetX = pageItemTransform[4];
+  const pageOffsetY = pageItemTransform[5];
   // Get the 2x3 transformation matrix of the element
   const elementItemTransform = element
     .getAttribute("ItemTransform")!
     .split(" ")
-    .map(parseFloat);
+    .map(parseFloat) as Matrix;
+  // elements between the page and the element in the tree:
+  const ancestors: Element[] = [];
+  let currentElement = element;
+  while (
+    currentElement.parentElement &&
+    currentElement.parentElement.tagName !== "Spread"
+  ) {
+    ancestors.push(currentElement.parentElement);
+    currentElement = currentElement.parentElement;
+  }
+  const allTransforms = ancestors
+    .map((ancestor) => {
+      const transform = ancestor.getAttribute("ItemTransform");
+      if (!transform) return null;
+      return transform.split(" ").map(parseFloat);
+    })
+    .filter((transform) => transform !== null) as Matrix[];
+  const combinedTransformMatrix = multiplyItemTransforms([
+    ...allTransforms,
+    elementItemTransform,
+  ]);
+  const elementTransform = parseTransformMatrix(combinedTransformMatrix);
+
   // Get the path geometry of the element.
   const elementPathGeometry = element.querySelector("PathGeometry")!;
-
-  // Extracts the transformations and dimensions.
-  const pageTransform = parseTransformMatrix(pageItemTransform);
-  const elementTransform = parseTransformMatrix(elementItemTransform);
   const shapeGeometry = parsePathGeometry(elementPathGeometry);
-
-  // Calculates offsets between the page and the shape.
-  // These offsets are used to adjust the element's position
-  // to be relative to the page instead of the original coordinates.
-  const xOffset = pageTransform.x - shapeGeometry.x;
-  const yOffset = pageTransform.y - shapeGeometry.y;
 
   // Adjusts the element's transformation for the offsets.
   // This makes the element's position relative to the page.
-  const elementX = elementTransform.x - xOffset;
-  const elementY = elementTransform.y - yOffset;
-
-  // Calculates the new coordinates of the shape's center after rotation. The "centerX" and "centerY" variables
-  // are the result of applying the rotation matrix to the original center coordinates of the shape.
-  // The rotation matrix formula is [cos(theta) -sin(theta); sin(theta) cos(theta)] where theta is the rotation angle.
-  const centerX =
-    shapeGeometry.centerX * Math.cos(elementTransform.rotation) -
-    shapeGeometry.centerY * Math.sin(elementTransform.rotation);
-  const centerY =
-    shapeGeometry.centerX * Math.sin(elementTransform.rotation) +
-    shapeGeometry.centerY * Math.cos(elementTransform.rotation);
+  const leftUpperPoint = transformPoint(
+    combinedTransformMatrix,
+    shapeGeometry.x,
+    shapeGeometry.y
+  );
+  // Page example: GeometricBounds="-36.5 -25 109.5 175" ItemTransform="1 0 0 1 -75 -36.5"
+  const geometricBounds = page
+    .getAttribute("GeometricBounds")
+    ?.split(" ")
+    .map(parseFloat) as [number, number, number, number];
+  const elementX = leftUpperPoint.x - pageOffsetX - geometricBounds[1];
+  const elementY = leftUpperPoint.y - pageOffsetY - geometricBounds[0];
 
   // Adjusts the unrotated element's position by adding the "rotatedX" and "rotatedY". These additions take into account
   // the changes in the position of the shape's center due to rotation. The results are the final coordinates of the shape
   // after rotation has been applied.
-  const x = elementX + centerX - shapeGeometry.centerX - pageGeometricBounds[1];
-  const y = elementY + centerY - shapeGeometry.centerY - pageGeometricBounds[0];
+  const x = elementX; // + pageOffsetX;
+  const y = elementY; // + pageOffsetY;
   const width = shapeGeometry.width * elementTransform.scaleX;
   const height = shapeGeometry.height * elementTransform.scaleY;
 
@@ -381,19 +395,17 @@ export function extractColors(graphicResources: Document) {
       // Get the color value
       const colorValue = colorTag.getAttribute("ColorValue")!;
 
-      // If it's a CMYK color, convert it to RGBA
+      // If it's a CMYK color, return it as CMYK
       if (space === "CMYK") {
         const CMYK = colorValue.split(" ").map(parseFloat);
-        return [
-          key,
-          CMYKtoRGBA({
-            c: CMYK[0],
-            m: CMYK[1],
-            y: CMYK[2],
-            k: CMYK[3],
-            tint: 1,
-          }),
-        ];
+        const color: CMYKColor = {
+          c: CMYK[0] / 100,
+          m: CMYK[1] / 100,
+          y: CMYK[2] / 100,
+          k: CMYK[3] / 100,
+          tint: 1,
+        };
+        return [key, color];
       }
 
       // If it's an RGB color, convert it to RGBA and normalize the values
@@ -433,7 +445,7 @@ export function extractColors(graphicResources: Document) {
  */
 export function extractGradients(
   graphicResources: Document,
-  colors: Map<string, RGBAColor>
+  colors: Map<string, Color>
 ): Map<string, Gradient> {
   return new Map(
     Array.from(graphicResources.querySelectorAll("Gradient")).map(
@@ -484,8 +496,8 @@ export function extractGradients(
  */
 function getGradientStopColor(
   gradientStop: Element,
-  colors: Map<string, RGBAColor>
-): RGBAColor {
+  colors: Map<string, Color>
+): Color {
   const color = gradientStop.getAttribute("StopColor")!;
   const colorValue = colors.get(color);
   if (colorValue) {
@@ -506,7 +518,7 @@ function getGradientStopColor(
  * @param CMYK The CMYK color to convert
  * @returns The RGBA color
  */
-export function CMYKtoRGBA(CMYK: CMYKColor): RGBAColor {
+export function CMYKtoRGBA(CMYK: CMYKColor): Color {
   // Normalize the input color components to the range of [0,1]
   const c = CMYK.c / 100;
   const m = CMYK.m / 100;
@@ -616,4 +628,35 @@ function getChildByTagName(parent: Element, tagName: string): Element | null {
   const children = [...parent.children];
   const child = children.find((child) => child.tagName === tagName);
   return child ?? null;
+}
+/**
+ * Gets the IDML ID of a block
+ * @param engine The CreativeEngine instance
+ * @param id The IDML ID to search for
+ * @returns The block ID or undefined if not found
+ */
+export function getBlockByIDMLId(
+  engine: CreativeEngine,
+  id: string
+): number | undefined {
+  const block = engine.block
+    .findAll()
+    .filter((block) => engine.block.hasMetadata(block, "idml/id"))
+    .find((block) => engine.block.getMetadata(block, "idml/id") === id);
+
+  return block;
+}
+
+/**
+ * Sets the IDML ID of a block
+ * @param engine The CreativeEngine instance
+ * @param block The block ID to set the IDML ID for
+ * @param id The IDML ID to set
+ */
+export function setBlockIDMLId(
+  engine: CreativeEngine,
+  block: number,
+  id: string
+): void {
+  engine.block.setMetadata(block, "idml/id", id);
 }

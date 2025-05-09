@@ -4,7 +4,7 @@
 
 The InDesign Importer for the CE.SDK allows you to seamlessly integrate InDesign files into the editor while retaining essential design attributes.
 
-Here’s an overview of the main features:
+Here's an overview of the main features:
 
 - _File Format Translation_: The importer converts **IDML files** from Adobe InDesign into the CE.SDK scene file format. The resulting scene archive includes all required assets for immediate use.
 - _Bulk Importing_: The codebase is adaptable for bulk importing, streamlining large-scale projects.
@@ -13,14 +13,14 @@ Here’s an overview of the main features:
 The following InDesign design elements will be preserved by the import:
 
 - _Element grouping_: grouped elements will be preserved and treated as a single unit.
-- _Positioning and Rotation_: Elements’ positioning and rotation are accurately transferred.
+- _Positioning and Rotation_: Elements' positioning and rotation are accurately transferred.
 - _Image Elements_: Embedded images are supported, while image cropping is not yet available.
 - _Text Elements_: Font family continuity is maintained, with options to supply font URIs or use Google fonts. Only bold and italic styles are currently supported.
 - _Shapes_: Rect, Oval, Polygon, and Line shapes are supported, along with custom shapes that might experience minor distortion.
 - _Colors and Strokes_: Gradient and solid colors, stroke weight, color, and alignment are faithfully reproduced.
 - _Transparency_: Transparency is preserved for seamless integration.
 
-This InDesign Importer bridges the gap between InDesign files and CE.SDK scenes, enabling efficient transitions while retaining crucial design details. Your input is invaluable as we continue to refine and improve the importer’s capabilities.
+This InDesign Importer bridges the gap between InDesign files and CE.SDK scenes, enabling efficient transitions while retaining crucial design details. Your input is invaluable as we continue to refine and improve the importer's capabilities.
 
 ## Installation
 
@@ -109,6 +109,37 @@ async function main() {
 }
 main();
 ```
+
+## Issues
+
+If you encounter any issues or have questions, please don't hesitate to contact us at support@img.ly.
+
+## Limitations and Unsupported Features
+
+The IDML importer has some limitations and unsupported features that you should be aware of:
+
+1. **PDF Content**
+
+   - PDF elements in the IDML file will be replaced with placeholder images. This is due to the fact that the CE.SDK does not support PDF content.
+
+2. **Linked Images**
+
+   - Only embedded images are supported. Linked images will be replaced with placeholder images.
+
+3. **Text Frame Overflow**
+
+   - Text that flows between multiple text frames is not supported and may result in text duplication.
+
+4. **Font Support**
+
+   - If a font name is not available as a typeface asset source, it will be replaced with fallback fonts.
+
+5. **Image Frame Fitting**
+
+   - Images that are shrunk inside their frames may not be rendered as expected. The CE.SDK does not support images that are smaller than their frames.
+
+6. **Page Sizes**
+   - Different page sizes within the same document are not supported. All pages will use the dimensions of the first page.
 
 ## License
 

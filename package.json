@@ -16,6 +16,7 @@
     "email": "support@img.ly",
     "url": "https://img.ly"
   },
+  "license": "See LICENSE.md",
   "bugs": {
     "email": "support@img.ly"
   },
@@ -60,14 +61,6 @@
   },
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/browser.d.ts",
-        "default": "./dist/browser.js"
-      },
-      "require": {
-        "types": "./dist/browser.d.ts",
-        "default": "./dist/browser.js"
-      },
       "node": {
         "import": {
           "types": "./dist/node.d.ts",
@@ -76,6 +69,16 @@
         "require": {
           "types": "./dist/node.d.ts",
           "default": "./dist/node.js"
+        }
+      },
+      "default": {
+        "import": {
+          "types": "./dist/browser.d.ts",
+          "default": "./dist/browser.js"
+        },
+        "require": {
+          "types": "./dist/browser.d.ts",
+          "default": "./dist/browser.js"
         }
       }
     }

@@ -1,6 +1,6 @@
 {
   "name": "@imgly/idml-importer",
-  "version": "1.1.7-rc.1",
+  "version": "1.1.7-rc.2",
   "module": "dist/browser.js",
   "types": "dist/browser.d.ts",
   "type": "module",
@@ -16,7 +16,6 @@
     "email": "support@img.ly",
     "url": "https://img.ly"
   },
-  "license": "See LICENSE.md",
   "bugs": {
     "email": "support@img.ly"
   },

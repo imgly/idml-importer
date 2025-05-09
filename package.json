@@ -67,6 +67,16 @@
       "require": {
         "types": "./dist/browser.d.ts",
         "default": "./dist/browser.js"
+      },
+      "node": {
+        "import": {
+          "types": "./dist/node.d.ts",
+          "default": "./dist/node.js"
+        },
+        "require": {
+          "types": "./dist/node.d.ts",
+          "default": "./dist/node.js"
+        }
       }
     }
   }

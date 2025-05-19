@@ -1,5 +1,7 @@
 # InDesign Importer for the CE.SDK
 
+> See the [changelog](CHANGELOG.md) for a detailed history of updates and improvements.
+
 ## Overview
 
 The InDesign Importer for the CE.SDK allows you to seamlessly integrate InDesign files into the editor while retaining essential design attributes.

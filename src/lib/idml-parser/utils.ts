@@ -145,47 +145,81 @@ export function parsePathGeometry(pathGeometry: Element) {
       (pointArray) => {
         // The string that will hold the path data for this sub-path.
         let pathData = "";
+        const points = Array.from(
+          pointArray.getElementsByTagName("PathPointType")
+        );
 
         // Iterates over each PathPointType to construct the path data
-        Array.from(pointArray.getElementsByTagName("PathPointType")).forEach(
-          (point, i) => {
-            // Extracts anchor, left and right coordinates. These are used to define the position of
-            // the point and the positions of the Bézier control points for this point in the path.
-            let anchor = point.getAttribute("Anchor")!.split(" ").map(Number);
-            let left = point
-              .getAttribute("LeftDirection")!
-              .split(" ")
-              .map(Number);
-            let right = point
+        points.forEach((point, i) => {
+          // Extracts anchor, left and right coordinates. These are used to define the position of
+          // the point and the positions of the Bézier control points for this point in the path.
+          let anchor = point.getAttribute("Anchor")!.split(" ").map(Number);
+          let left = point
+            .getAttribute("LeftDirection")!
+            .split(" ")
+            .map(Number);
+
+          // Adjusts the x and y values based on the minimum x and y values so the path data is
+          // relative to the bounding box of the shape.
+          const anchorX = anchor[0] - x;
+          const anchorY = anchor[1] - y;
+          const leftX = left[0] - x;
+          const leftY = left[1] - y;
+
+          if (i === 0) {
+            // Moves to the first anchor point with a "Move" command. This starts a new sub-path at
+            // the specified coordinates.
+            pathData += `M ${anchorX},${anchorY} `;
+          } else {
+            // Get the previous point's right control point for the first control point of this curve
+            const prevPoint = points[i - 1];
+            const prevRight = prevPoint
               .getAttribute("RightDirection")!
               .split(" ")
               .map(Number);
+            const prevRightX = prevRight[0] - x;
+            const prevRightY = prevRight[1] - y;
 
-            // Adjusts the x and y values based on the minimum x and y values so the path data is
-            // relative to the bounding box of the shape.
-            const anchorX = anchor[0] - x;
-            const anchorY = anchor[1] - y;
-            const leftX = left[0] - x;
-            const leftY = left[1] - y;
-            const rightX = right[0] - x;
-            const rightY = right[1] - y;
-
-            if (i === 0) {
-              // Moves to the first anchor point with a "Move" command. This starts a new sub-path at
-              // the specified coordinates.
-              pathData += `M ${anchorX},${anchorY} `;
-            }
-
-            // Creates a curve to the next anchor point with a "Cubic Bézier Curve" command.
-            // The coordinates for the Bézier control points (left and right)
-            // and the next anchor point are included.
-            pathData += `C ${leftX},${leftY} ${rightX},${rightY} ${anchorX},${anchorY} `;
+            // Creates a curve FROM the previous anchor TO this anchor,
+            // using the previous point's right control point and this point's left control point
+            pathData += `C ${prevRightX},${prevRightY} ${leftX},${leftY} ${anchorX},${anchorY} `;
           }
-        );
+        });
 
         // Closes the path if it's not open by appending a "Close Path" command. This creates a
         // straight line from the current point to the start of the current sub-path.
         if (geometryType.getAttribute("PathOpen") === "false") {
+          // For closed paths, we need to add the final curve connecting the last point back to the first
+          // ONLY if we have multiple points (otherwise there's nothing to close)
+          if (points.length > 1) {
+            const firstPoint = points[0];
+            const lastPoint = points[points.length - 1];
+
+            const firstAnchor = firstPoint
+              .getAttribute("Anchor")!
+              .split(" ")
+              .map(Number);
+            const firstLeft = firstPoint
+              .getAttribute("LeftDirection")!
+              .split(" ")
+              .map(Number);
+            const lastRight = lastPoint
+              .getAttribute("RightDirection")!
+              .split(" ")
+              .map(Number);
+
+            const firstAnchorX = firstAnchor[0] - x;
+            const firstAnchorY = firstAnchor[1] - y;
+            const firstLeftX = firstLeft[0] - x;
+            const firstLeftY = firstLeft[1] - y;
+            const lastRightX = lastRight[0] - x;
+            const lastRightY = lastRight[1] - y;
+
+            // Add explicit curve from last point to first point
+            pathData += `C ${lastRightX},${lastRightY} ${firstLeftX},${firstLeftY} ${firstAnchorX},${firstAnchorY} `;
+          }
+
+          // After adding the final curve, close the path
           pathData += "Z";
         }
 

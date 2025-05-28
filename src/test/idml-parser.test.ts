@@ -55,6 +55,45 @@ test(
         console.error(e);
         return;
       }
+      // Do some sanity checks:
+      // all blocks should be valid
+      const blocks = engine.block
+        .findAll()
+        .filter((block) => !engine.block.isValid(block));
+      if (blocks.length > 0) {
+        console.error(
+          `Found ${blocks.length} invalid blocks in the scene:`,
+          blocks
+        );
+      }
+      // all graphics blocks have a shape and a valid fill:
+      const graphicsBlocks = engine.block.findByType("graphic");
+      graphicsBlocks.filter((block) => {
+        const shape = engine.block.getShape(block);
+        const fill = engine.block.getFill(block);
+        if (!shape) {
+          console.error(
+            `Graphic block ${block} has no shape. This is not expected.`
+          );
+        }
+        if (!fill || !engine.block.isValid(fill)) {
+          console.error(
+            `Graphic block ${block} has no valid fill. This is not expected.`
+          );
+        }
+      });
+      // ensure that all graphic blocks have a valid shape block:
+      const graphicBlocksWithInvalidShapes = graphicsBlocks.filter((block) => {
+        const shape = engine.block.getShape(block);
+        return !shape || !engine.block.isValid(shape);
+      });
+      if (graphicBlocksWithInvalidShapes.length > 0) {
+        console.error(
+          `Found ${graphicBlocksWithInvalidShapes.length} graphic blocks with invalid shapes:`,
+          graphicBlocksWithInvalidShapes
+        );
+      }
+
       const imageBlobs = await Promise.all(
         engine.scene.getPages().map((page) =>
           engine.block.export(page, "image/png" as any, {

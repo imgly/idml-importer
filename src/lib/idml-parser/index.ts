@@ -394,6 +394,16 @@ export class IDMLParser {
               this.applyFill(block, element);
               this.applyBorderRadius(block, element);
             }
+            // If this element does not have a fill until now, we add a fill block but disable it.
+            // This is necessary because the CESDK Editor requires a fill block to be present.
+            if (
+              !this.engine.block.getFill(block) ||
+              !this.engine.block.isValid(this.engine.block.getFill(block))
+            ) {
+              const fill = this.engine.block.createFill("color");
+              this.engine.block.setBool(block, "fill/enabled", false);
+              this.engine.block.setFill(block, fill);
+            }
 
             this.copyElementName(element, block);
             return [block];

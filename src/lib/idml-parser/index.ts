@@ -310,6 +310,35 @@ export class IDMLParser {
       Array.from(element.children).map(async (element): Promise<number[]> => {
         const visible = element.getAttribute("Visible") === "true";
         if (!visible) return [];
+
+        const rectOrPolygonOrOvalChild = element.querySelectorAll(
+          `${SPREAD_ELEMENTS.RECTANGLE}, ${SPREAD_ELEMENTS.POLYGON}, ${SPREAD_ELEMENTS.OVAL}`
+        );
+        if (rectOrPolygonOrOvalChild?.length > 0) {
+          this.logger.log(
+            "Nested frames were detected and will be processed as a group of shapes. There may be some visual artifacts.",
+            "warning"
+          );
+          // Same logic as processing a group
+          // If the element is a group, we render the group's children recursively
+          // and then we group the rendered blocks together
+          const children = await this.renderPageElements(
+            element,
+            spread,
+            pageBlock
+          );
+          const block = this.engine.block.group(children);
+          // reordering the blocks to the correct order
+          const flatChildrenBlocks = children
+            .flat()
+            .filter((block) => block !== null);
+          for (let index = 0; index < flatChildrenBlocks.length; index++) {
+            const child = flatChildrenBlocks[index];
+            this.engine.block.insertChild(block, child, index);
+          }
+          this.copyElementName(element, block);
+          return [block];
+        }
         // Render the CESDK block based on the element type
         switch (element.tagName) {
           case SPREAD_ELEMENTS.RECTANGLE:

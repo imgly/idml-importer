@@ -16,9 +16,9 @@ The following InDesign design elements will be preserved by the import:
 
 - _Element grouping_: grouped elements will be preserved and treated as a single unit.
 - _Positioning and Rotation_: Elements' positioning and rotation are accurately transferred.
-- _Image Elements_: Embedded images are supported, while image cropping is not yet available.
+- _Image Elements_: Embedded images are supported, while image cropping is not yet available. Note that only images with formats that are [supported by CE.SDK](https://img.ly/docs/cesdk/js/file-format-support-3c4b2a/#importing-media) will be rendered and otherwise shown as placeholders.
 - _Text Elements_: Font family continuity is maintained, with options to supply font URIs or use Google fonts. Only bold and italic styles are currently supported.
-- _Shapes_: Rect, Oval, Polygon, and Line shapes are supported, along with custom shapes that might experience minor distortion.
+- _Shapes_: Rect, Oval, Polygon, and Line shapes are supported, along with custom shapes that might experience minor distortion. Note that nested frames, i.e. shapes within a shape, are imported as groups of individual shapes which might lead to visual differences in the output.
 - _Colors and Strokes_: Gradient and solid colors, stroke weight, color, and alignment are faithfully reproduced.
 - _Transparency_: Transparency is preserved for seamless integration.
 

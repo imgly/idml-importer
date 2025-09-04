@@ -1,5 +1,13 @@
 # @imgly/idml-importer
 
+## 1.1.11
+
+### Patch Changes
+
+- 6d68514: Add: Support nested frames as groups of shapes
+
+- 82d29d0: Fix: Dependencies
+
 ## 1.1.10
 
 ### Patch Changes

@@ -987,29 +987,21 @@ export class IDMLParser {
       this.logger.log(`Could not load image from URI ${imageURI}`, "error");
     }
     this.engine.block.setFill(block, fill);
-    this.engine.block.setKind(block, "image");
-    // Consider FrameFittingOption when setting the content fill mode
-    // If all frame fitting options are negative, this implies that the image is shrunk inside the frame.
-    // Example: FrameFittingOption LeftCrop="-14.222526745057785" TopCrop="-16.089925261496205" RightCrop="-15.077750964903117" BottomCrop="-16.660074738503738" FittingOnEmptyFrame="Proportionally" />
-    // We do not support a crop that makes the image fill smaller than the (graphics block) frame.
-    // We should add a warning and set the content fill to "Contain" in this case.
-    // Fill mode "Contain" will make sure that the image is not cropped and fits the frame.
-    const frameFittingOption = element.querySelector("FrameFittingOption");
-    if (frameFittingOption) {
-      const [leftCrop, topCrop, rightCrop, bottomCrop] = [
-        "LeftCrop",
-        "TopCrop",
-        "RightCrop",
-        "BottomCrop",
-      ].map((crop) => parseFloat(frameFittingOption.getAttribute(crop) ?? "0"));
-      if (leftCrop < 0 && topCrop < 0 && rightCrop < 0 && bottomCrop < 0) {
-        this.logger.log(
-          "The image is shrunk inside the frame using. This is currently not supported and might lead to unexpected results.",
-          "warning"
-        );
-        this.engine.block.setContentFillMode(block, "Contain");
-      }
-    }
+
+    // Don't set kind to "image" - keep it as "shape" for shaped frames
+    // Setting kind to "image" would override the vector path shape
+
+    // Enable clipping so that the image respects the shape boundaries
+    this.engine.block.setClipped(block, true);
+
+    // Always use Cover mode initially, then let the user adjust if needed
+    // Cover ensures the image fills the frame while maintaining aspect ratio
+    this.engine.block.setContentFillMode(block, "Cover");
+
+    // Apply FrameFittingOption crop values if present
+    // TEMPORARILY DISABLED to test if this is causing the flat bottom issue
+    // this.applyFrameFittingOption(block, element);
+
     return true;
   }
 
@@ -1052,5 +1044,93 @@ export class IDMLParser {
         radius
       );
     });
+  }
+
+  /**
+   * Parses the FrameFittingOption crop values and applies them to a CESDK block
+   * InDesign uses FrameFittingOption to control how images are positioned and cropped within frames
+   * The crop values define which parts of the source image should be trimmed away
+   * @param block The CESDK block to apply the frame fitting to
+   * @param element The IDML element
+   * @returns void
+   */
+  private applyFrameFittingOption(block: number, element: Element) {
+    const frameFittingOption = element.querySelector("FrameFittingOption");
+    if (!frameFittingOption) return;
+
+    // Get crop values from FrameFittingOption (in points)
+    const leftCrop = parseFloat(
+      frameFittingOption.getAttribute("LeftCrop") ?? "0"
+    );
+    const topCrop = parseFloat(
+      frameFittingOption.getAttribute("TopCrop") ?? "0"
+    );
+    const rightCrop = parseFloat(
+      frameFittingOption.getAttribute("RightCrop") ?? "0"
+    );
+    const bottomCrop = parseFloat(
+      frameFittingOption.getAttribute("BottomCrop") ?? "0"
+    );
+
+    // If all crops are 0, no adjustment needed
+    if (leftCrop === 0 && topCrop === 0 && rightCrop === 0 && bottomCrop === 0) {
+      return;
+    }
+
+    // Get the image element to determine the original image dimensions
+    const image = element.querySelector("Image");
+    if (!image) return;
+
+    // Get the image's actual dimensions from attributes
+    const actualPpiAttr = image.getAttribute("ActualPpi");
+    if (!actualPpiAttr) return;
+
+    // Get the image transform
+    const imageItemTransform = image
+      .getAttribute("ItemTransform")
+      ?.split(" ")
+      .map(parseFloat);
+    if (!imageItemTransform || imageItemTransform.length < 6) return;
+
+    // The scale factors in the transform
+    const imageScaleX = imageItemTransform[0];
+    const imageScaleY = imageItemTransform[3];
+
+    // Get the frame's dimensions (the polygon/shape dimensions)
+    const frameWidth = this.engine.block.getWidth(block);
+    const frameHeight = this.engine.block.getHeight(block);
+
+    // Convert crop values from points to inches
+    const leftCropInches = leftCrop / POINT_TO_INCH;
+    const topCropInches = topCrop / POINT_TO_INCH;
+    const rightCropInches = rightCrop / POINT_TO_INCH;
+    const bottomCropInches = bottomCrop / POINT_TO_INCH;
+
+    // The visible (non-cropped) portion of the image in the frame
+    const visibleWidth = frameWidth - (leftCropInches + rightCropInches) / Math.abs(imageScaleX);
+    const visibleHeight = frameHeight - (topCropInches + bottomCropInches) / Math.abs(imageScaleY);
+
+    // Calculate how much we need to scale the image to fill the frame
+    // after accounting for the cropped portions
+    const cropScaleX = frameWidth / visibleWidth;
+    const cropScaleY = frameHeight / visibleHeight;
+
+    // Calculate the translation needed to offset the left/top crops
+    // This shifts the image so the visible portion aligns with the frame
+    const cropTranslateX = -(leftCropInches / Math.abs(imageScaleX)) / frameWidth;
+    const cropTranslateY = -(topCropInches / Math.abs(imageScaleY)) / frameHeight;
+
+    // Apply the crop transformation to the block
+    try {
+      this.engine.block.setCropScaleX(block, cropScaleX);
+      this.engine.block.setCropScaleY(block, cropScaleY);
+      this.engine.block.setCropTranslationX(block, cropTranslateX);
+      this.engine.block.setCropTranslationY(block, cropTranslateY);
+    } catch (e) {
+      this.logger.log(
+        "Could not apply frame fitting crop values to block",
+        "warning"
+      );
+    }
   }
 }

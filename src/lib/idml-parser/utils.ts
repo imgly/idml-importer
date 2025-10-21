@@ -113,12 +113,29 @@ export function parsePathGeometry(pathGeometry: Element) {
   let yValues: number[] = [];
 
   // Iterates over each PathPointType to extract x and y coordinates
+  // IMPORTANT: We need to include control points (LeftDirection, RightDirection) in the bounding box
+  // because Bézier curves can extend beyond their anchor points
   Array.from(points).forEach((point) => {
     // The Anchor attribute contains the x and y coordinates of the point, separated by a space.
     let anchorAttr = point.getAttribute("Anchor")!;
-    let [x, y] = anchorAttr.split(" ");
-    xValues.push(parseFloat(x));
-    yValues.push(parseFloat(y));
+    let [x, y] = anchorAttr.split(" ").map(parseFloat);
+    xValues.push(x);
+    yValues.push(y);
+
+    // Also include the Bézier control points in the bounding box calculation
+    let leftDir = point.getAttribute("LeftDirection");
+    if (leftDir) {
+      let [lx, ly] = leftDir.split(" ").map(parseFloat);
+      xValues.push(lx);
+      yValues.push(ly);
+    }
+
+    let rightDir = point.getAttribute("RightDirection");
+    if (rightDir) {
+      let [rx, ry] = rightDir.split(" ").map(parseFloat);
+      xValues.push(rx);
+      yValues.push(ry);
+    }
   });
 
   // Determines the minimum and maximum x and y values, which are then used to calculate the width

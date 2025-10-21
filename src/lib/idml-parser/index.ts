@@ -998,10 +998,6 @@ export class IDMLParser {
     // Cover ensures the image fills the frame while maintaining aspect ratio
     this.engine.block.setContentFillMode(block, "Cover");
 
-    // Apply FrameFittingOption crop values if present
-    // TEMPORARILY DISABLED to test if this is causing the flat bottom issue
-    // this.applyFrameFittingOption(block, element);
-
     return true;
   }
 

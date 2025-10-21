@@ -994,9 +994,25 @@ export class IDMLParser {
     // Enable clipping so that the image respects the shape boundaries
     this.engine.block.setClipped(block, true);
 
-    // Always use Cover mode initially, then let the user adjust if needed
-    // Cover ensures the image fills the frame while maintaining aspect ratio
-    this.engine.block.setContentFillMode(block, "Cover");
+    // Check if we should set a specific fill mode based on FrameFittingOption
+    // If all crops are negative, the image is shrunk inside the frame - use Contain mode
+    const frameFittingOption = element.querySelector("FrameFittingOption");
+    if (frameFittingOption) {
+      const [leftCrop, topCrop, rightCrop, bottomCrop] = [
+        "LeftCrop",
+        "TopCrop",
+        "RightCrop",
+        "BottomCrop",
+      ].map((crop) => parseFloat(frameFittingOption.getAttribute(crop) ?? "0"));
+
+      if (leftCrop < 0 && topCrop < 0 && rightCrop < 0 && bottomCrop < 0) {
+        // Negative crops mean the image is shrunk - use Contain to prevent cropping
+        this.engine.block.setContentFillMode(block, "Contain");
+      }
+    }
+    // NOTE: We don't explicitly set a fill mode in the normal case.
+    // This allows the engine to use its default behavior, which produces better results
+    // than always using "Cover" mode (which can cause excessive zooming).
 
     return true;
   }

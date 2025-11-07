@@ -990,8 +990,8 @@ export class IDMLParser {
     this.engine.block.setKind(block, 'image');
 
     // Consider FrameFittingOption when setting the content fill mode
-    // If all frame fitting options are negative, this implies that the image is shrunk inside the frame.	    // Check if we should set a specific fill mode based on FrameFittingOption
-    // Example: FrameFittingOption LeftCrop="-14.222526745057785" TopCrop="-16.089925261496205" RightCrop="-15.077750964903117" BottomCrop="-16.660074738503738" FittingOnEmptyFrame="Proportionally" />	    // If all crops are negative, the image is shrunk inside the frame - use Contain mode
+    // If all frame fitting options are negative, this implies that the image is shrunk inside the frame.
+    // Example: FrameFittingOption LeftCrop="-14.222526745057785" TopCrop="-16.089925261496205" RightCrop="-15.077750964903117" BottomCrop="-16.660074738503738" FittingOnEmptyFrame="Proportionally" />
     // We do not support a crop that makes the image fill smaller than the (graphics block) frame.
     // We should add a warning and set the content fill to "Contain" in this case.
     // Fill mode "Contain" will make sure that the image is not cropped and fits the frame.
@@ -1006,7 +1006,6 @@ export class IDMLParser {
 
       if (leftCrop < 0 && topCrop < 0 && rightCrop < 0 && bottomCrop < 0) {
         this.logger.log(
-          // Negative crops mean the image is shrunk - use Contain to prevent cropping
           'The image is shrunk inside the frame using. This is currently not supported and might lead to unexpected results.',
           'warning'
         );

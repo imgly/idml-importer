@@ -988,11 +988,10 @@ export class IDMLParser {
     }
     this.engine.block.setFill(block, fill);
 
-    // Don't set kind to "image" - keep it as "shape" for shaped frames
-    // Setting kind to "image" would override the vector path shape
-
-    // Enable clipping so that the image respects the shape boundaries
-    this.engine.block.setClipped(block, true);
+    // Set kind to "image" to enable shape-based clipping
+    // When kind is "image", the engine uses the block's shape as a clipping path
+    // This allows the image fill to be clipped to custom vector paths (polygons)
+    this.engine.block.setKind(block, "image");
 
     // Check if we should set a specific fill mode based on FrameFittingOption
     // If all crops are negative, the image is shrunk inside the frame - use Contain mode

@@ -113,8 +113,6 @@ export function parsePathGeometry(pathGeometry: Element) {
   let yValues: number[] = [];
 
   // Iterates over each PathPointType to extract x and y coordinates
-  // IMPORTANT: We need to include control points (LeftDirection, RightDirection) in the bounding box
-  // because Bézier curves can extend beyond their anchor points
   Array.from(points).forEach((point) => {
     // The Anchor attribute contains the x and y coordinates of the point, separated by a space.
     let anchorAttr = point.getAttribute("Anchor")!;
@@ -122,7 +120,8 @@ export function parsePathGeometry(pathGeometry: Element) {
     xValues.push(x);
     yValues.push(y);
 
-    // Also include the Bézier control points in the bounding box calculation
+    // Include the Bézier control points in the bounding box calculation as Bézier curves can extend
+    // beyond the anchor points.
     let leftDir = point.getAttribute("LeftDirection");
     if (leftDir) {
       let [lx, ly] = leftDir.split(" ").map(parseFloat);

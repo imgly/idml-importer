@@ -1,15 +1,15 @@
-import type CreativeEngine from "@cesdk/engine";
-import type { Color, Font } from "@cesdk/engine";
+import type CreativeEngine from '@cesdk/engine';
+import type { Color, Font } from '@cesdk/engine';
 import {
   calculateSplitIndices,
   getTextFramesWithBlocks,
   orderTextFrames,
-  updateFrameContents,
-} from "./features/split-text-frames";
-import type { TypefaceResolver } from "./font-resolver";
-import defaultFontResolver from "./font-resolver";
-import { Logger } from "./logger";
-import type { Gradient, IDML } from "./types";
+  updateFrameContents
+} from './features/split-text-frames';
+import type { TypefaceResolver } from './font-resolver';
+import defaultFontResolver from './font-resolver';
+import { Logger } from './logger';
+import type { Gradient, IDML } from './types';
 import {
   angleToGradientControlPoints,
   extractColors,
@@ -21,26 +21,26 @@ import {
   parseFontStyleString,
   replaceSpecialCharacters,
   setBlockIDMLId,
-  unzipIdmlFile,
-} from "./utils";
+  unzipIdmlFile
+} from './utils';
 
 // The design unit used in the CESDK Editor
-const DESIGN_UNIT = "Inch";
+const DESIGN_UNIT = 'Inch';
 // "The units used by the pasteboard coordinate system are points, defined as 72 units per inch.
 // Changing the definition of points in the In­ Design user interface has no effect on the definition
 // of points used in IDML."
 const POINT_TO_INCH = 72;
-const DEFAULT_FONT_NAME = "Roboto";
+const DEFAULT_FONT_NAME = 'Roboto';
 
 // Element types of the spreads in the IDML file
 const SPREAD_ELEMENTS = {
-  PAGE: "Page",
-  RECTANGLE: "Rectangle",
-  OVAL: "Oval",
-  POLYGON: "Polygon",
-  GRAPHIC_LINE: "GraphicLine",
-  TEXT_FRAME: "TextFrame",
-  GROUP: "Group",
+  PAGE: 'Page',
+  RECTANGLE: 'Rectangle',
+  OVAL: 'Oval',
+  POLYGON: 'Polygon',
+  GRAPHIC_LINE: 'GraphicLine',
+  TEXT_FRAME: 'TextFrame',
+  GROUP: 'Group'
 } as const;
 
 export class IDMLParser {
@@ -66,9 +66,9 @@ export class IDMLParser {
   ) {
     this.engine = engine;
     this.idml = idml;
-    this.colors = extractColors(this.idml["Resources/Graphic.xml"]);
+    this.colors = extractColors(this.idml['Resources/Graphic.xml']);
     this.gradients = extractGradients(
-      this.idml["Resources/Graphic.xml"],
+      this.idml['Resources/Graphic.xml'],
       this.colors
     );
 
@@ -83,23 +83,23 @@ export class IDMLParser {
     // create a new scene and set the design unit and page dimensions
     // we are assuming that all pages have the same dimensions since
     // we do not support different page sizes in the CESDK Editor yet
-    this.scene = this.engine.scene.create("VerticalStack");
+    this.scene = this.engine.scene.create('VerticalStack');
 
-    const stack = this.engine.block.findByType("//ly.img.ubq/stack")[0];
+    const stack = this.engine.block.findByType('//ly.img.ubq/stack')[0];
     // set standard values for the stack block:
-    this.engine.block.setFloat(stack, "stack/spacing", 35);
-    this.engine.block.setBool(stack, "stack/spacingInScreenspace", true);
+    this.engine.block.setFloat(stack, 'stack/spacing', 35);
+    this.engine.block.setBool(stack, 'stack/spacingInScreenspace', true);
 
     this.engine.scene.setDesignUnit(DESIGN_UNIT);
-    this.engine.block.setInt(this.scene, "scene/dpi", POINT_TO_INCH);
+    this.engine.block.setInt(this.scene, 'scene/dpi', POINT_TO_INCH);
     this.engine.block.setFloat(
       this.scene,
-      "scene/pageDimensions/width",
+      'scene/pageDimensions/width',
       width / POINT_TO_INCH
     );
     this.engine.block.setFloat(
       this.scene,
-      "scene/pageDimensions/height",
+      'scene/pageDimensions/height',
       height / POINT_TO_INCH
     );
     this.engine.editor;
@@ -130,19 +130,19 @@ export class IDMLParser {
     await this.generatePagesFromSpreads();
     return {
       scene: this.scene,
-      logger: this.logger,
+      logger: this.logger
     };
   }
 
   private getSpreads() {
     // extract the designmap.xml file
-    const designMap = this.idml["designmap.xml"];
+    const designMap = this.idml['designmap.xml'];
 
     // extract the spreads from the designmap.xml file and
     // map the spread src to the spread document in the IDML file
-    return Array.from(designMap.getElementsByTagName("idPkg:Spread")).map(
+    return Array.from(designMap.getElementsByTagName('idPkg:Spread')).map(
       (spread) => {
-        const src = spread.getAttribute("src") as string;
+        const src = spread.getAttribute('src') as string;
         return this.idml[src];
       }
     );
@@ -150,31 +150,31 @@ export class IDMLParser {
 
   // Extract bleed margins from the IDML file
   private getBleedMargins() {
-    const preferences = this.idml["Resources/Preferences.xml"];
-    const documentPreference = preferences.querySelector("DocumentPreference")!;
+    const preferences = this.idml['Resources/Preferences.xml'];
+    const documentPreference = preferences.querySelector('DocumentPreference')!;
     const bleedMargins = {
       top:
-        parseFloat(documentPreference.getAttribute("DocumentBleedTopOffset")!) /
+        parseFloat(documentPreference.getAttribute('DocumentBleedTopOffset')!) /
         POINT_TO_INCH,
       bottom:
         parseFloat(
-          documentPreference.getAttribute("DocumentBleedBottomOffset")!
+          documentPreference.getAttribute('DocumentBleedBottomOffset')!
         ) / POINT_TO_INCH,
       left:
         parseFloat(
-          documentPreference.getAttribute("DocumentBleedInsideOrLeftOffset")!
+          documentPreference.getAttribute('DocumentBleedInsideOrLeftOffset')!
         ) / POINT_TO_INCH,
       right:
         parseFloat(
-          documentPreference.getAttribute("DocumentBleedOutsideOrRightOffset")!
-        ) / POINT_TO_INCH,
+          documentPreference.getAttribute('DocumentBleedOutsideOrRightOffset')!
+        ) / POINT_TO_INCH
     };
     return bleedMargins;
   }
   // generate pages from the spreads in the IDML file
   private async generatePagesFromSpreads() {
     // find the stack block in the scene to append the pages to
-    const stack = this.engine.block.findByType("//ly.img.ubq/stack")[0];
+    const stack = this.engine.block.findByType('//ly.img.ubq/stack')[0];
 
     const bleedMargin = this.getBleedMargins();
     const hasBleedMargin = false; // Currently, the extracted bleed margins are not correct. We do not import them.
@@ -184,12 +184,12 @@ export class IDMLParser {
       // find the page element in the spread XML document
       const page = spread.querySelector(SPREAD_ELEMENTS.PAGE);
 
-      if (!page) throw new Error("No page found in the spread");
+      if (!page) throw new Error('No page found in the spread');
 
       // Get the page name and dimensions from the page element
       const pageAttributes = getPageAttributes(page);
       // Create a new page block
-      const pageBlock = this.engine.block.create("//ly.img.ubq/page");
+      const pageBlock = this.engine.block.create('//ly.img.ubq/page');
 
       // Convert the page dimensions from points to the CESDK design unit
       const width = pageAttributes.width / POINT_TO_INCH;
@@ -202,30 +202,30 @@ export class IDMLParser {
       this.engine.block.setClipped(pageBlock, true);
       // Set the bleed margins
       if (hasBleedMargin) {
-        this.engine.block.setBool(pageBlock, "page/marginEnabled", true);
+        this.engine.block.setBool(pageBlock, 'page/marginEnabled', true);
       }
       this.engine.block.setFloat(
         pageBlock,
-        "page/margin/bottom",
+        'page/margin/bottom',
         bleedMargin.bottom
       );
       this.engine.block.setFloat(
         pageBlock,
-        "page/margin/left",
+        'page/margin/left',
         bleedMargin.left
       );
       this.engine.block.setFloat(
         pageBlock,
-        "page/margin/right",
+        'page/margin/right',
         bleedMargin.right
       );
-      this.engine.block.setFloat(pageBlock, "page/margin/top", bleedMargin.top);
+      this.engine.block.setFloat(pageBlock, 'page/margin/top', bleedMargin.top);
 
       // Append the page block to the stack block
       this.engine.block.appendChild(stack, pageBlock);
 
       // Get the spread element from the spread XML document
-      const spreadElement = spread.getElementsByTagName("Spread")[0];
+      const spreadElement = spread.getElementsByTagName('Spread')[0];
       // Render the page elements and append them to the page block
       await this.renderPageElements(spreadElement, page, pageBlock);
 
@@ -242,7 +242,7 @@ export class IDMLParser {
       spreadElement.getElementsByTagName(SPREAD_ELEMENTS.TEXT_FRAME)
     );
     const storiesMap = allFrames.reduce((acc, tf) => {
-      const storyId = tf.getAttribute("ParentStory");
+      const storyId = tf.getAttribute('ParentStory');
       if (storyId) (acc[storyId] ??= []).push(tf);
       return acc;
     }, {} as Record<string, Element[]>);
@@ -262,7 +262,7 @@ export class IDMLParser {
 
         const firstBlock = framesWithBlocks[0].block;
         const fullText =
-          this.engine.block.getString(firstBlock, "text/text") || "";
+          this.engine.block.getString(firstBlock, 'text/text') || '';
         if (fullText.length === 0) return; // Skip empty stories
 
         const splitIndices = calculateSplitIndices(
@@ -277,17 +277,17 @@ export class IDMLParser {
           (blockId, startIndex, endIndex) => {
             const rangesToRemove = [
               { start: endIndex, end: fullText.length - 1 },
-              { start: 0, end: startIndex },
+              { start: 0, end: startIndex }
             ].filter(({ start, end }) => start < end);
             rangesToRemove.forEach(({ start, end }) => {
-              this.engine.block.replaceText(blockId, "", start, end);
+              this.engine.block.replaceText(blockId, '', start, end);
             });
           }
         );
 
         this.logger.log(
-          "A story that spanned multiple text frames was split into multiple text blocks.",
-          "info"
+          'A story that spanned multiple text frames was split into multiple text blocks.',
+          'info'
         );
       });
   }
@@ -308,7 +308,7 @@ export class IDMLParser {
     // Loop over the page element's children
     const blocks = await Promise.all(
       Array.from(element.children).map(async (element): Promise<number[]> => {
-        const visible = element.getAttribute("Visible") === "true";
+        const visible = element.getAttribute('Visible') === 'true';
         if (!visible) return [];
 
         const rectOrPolygonOrOvalChild = element.querySelectorAll(
@@ -316,8 +316,8 @@ export class IDMLParser {
         );
         if (rectOrPolygonOrOvalChild?.length > 0) {
           this.logger.log(
-            "Nested frames were detected and will be processed as a group of shapes. There may be some visual artifacts.",
-            "warning"
+            'Nested frames were detected and will be processed as a group of shapes. There may be some visual artifacts.',
+            'warning'
           );
           // Same logic as processing a group
           // If the element is a group, we render the group's children recursively
@@ -349,41 +349,41 @@ export class IDMLParser {
               spread
             );
 
-            const block = this.engine.block.create("//ly.img.ubq/graphic");
+            const block = this.engine.block.create('//ly.img.ubq/graphic');
 
             let shape: number;
             if (element.tagName === SPREAD_ELEMENTS.POLYGON) {
-              this.engine.block.setKind(block, "shape");
+              this.engine.block.setKind(block, 'shape');
               shape = this.engine.block.createShape(
-                "//ly.img.ubq/shape/vector_path"
+                '//ly.img.ubq/shape/vector_path'
               );
 
               // Set the vector path's path data, width, and height
               this.engine.block.setString(
                 shape,
-                "vector_path/path",
+                'vector_path/path',
                 shapeAttributes.pathData
               );
               this.engine.block.setFloat(
                 shape,
-                "vector_path/width",
+                'vector_path/width',
                 shapeAttributes.width
               );
               this.engine.block.setFloat(
                 shape,
-                "vector_path/height",
+                'vector_path/height',
                 shapeAttributes.height
               );
             } else if (element.tagName === SPREAD_ELEMENTS.OVAL) {
               // if the element is an oval, we need to set the shape to a circle
               shape = this.engine.block.createShape(
-                "//ly.img.ubq/shape/ellipse"
+                '//ly.img.ubq/shape/ellipse'
               );
             } else if (element.tagName === SPREAD_ELEMENTS.RECTANGLE) {
               // if the element is a rectangle, we need to set the shape to a rectangle
-              shape = this.engine.block.createShape("//ly.img.ubq/shape/rect");
+              shape = this.engine.block.createShape('//ly.img.ubq/shape/rect');
             } else {
-              throw new Error("Unknown shape type");
+              throw new Error('Unknown shape type');
             }
             this.engine.block.setShape(block, shape);
 
@@ -399,7 +399,7 @@ export class IDMLParser {
                 y,
                 width,
                 height,
-                rotation,
+                rotation
               }: {
                 x: number;
                 y: number;
@@ -429,8 +429,8 @@ export class IDMLParser {
               !this.engine.block.getFill(block) ||
               !this.engine.block.isValid(this.engine.block.getFill(block))
             ) {
-              const fill = this.engine.block.createFill("color");
-              this.engine.block.setBool(block, "fill/enabled", false);
+              const fill = this.engine.block.createFill('color');
+              this.engine.block.setBool(block, 'fill/enabled', false);
               this.engine.block.setFill(block, fill);
             }
 
@@ -446,9 +446,9 @@ export class IDMLParser {
             );
 
             // Create a line block
-            const block = this.engine.block.create("//ly.img.ubq/graphic");
-            this.engine.block.setKind(block, "shape");
-            const shape = this.engine.block.createShape("line");
+            const block = this.engine.block.create('//ly.img.ubq/graphic');
+            this.engine.block.setKind(block, 'shape');
+            const shape = this.engine.block.createShape('line');
             this.engine.block.setShape(block, shape);
 
             this.applyTransparency(block, element);
@@ -457,22 +457,22 @@ export class IDMLParser {
 
             // Get the inherited styles of the element to use as fallback
             const appliedObjectStyle =
-              element.getAttribute("AppliedObjectStyle")!;
+              element.getAttribute('AppliedObjectStyle')!;
             const objectStyles = this.idml[
-              "Resources/Styles.xml"
+              'Resources/Styles.xml'
             ].querySelector(`ObjectStyle[Self="${appliedObjectStyle}"]`)!;
 
             // Get the stroke styles from the element or the inherited styles
             const strokeColor =
-              element.getAttribute("StrokeColor") ??
-              objectStyles.getAttribute("StrokeColor");
+              element.getAttribute('StrokeColor') ??
+              objectStyles.getAttribute('StrokeColor');
             const strokeWeight =
-              element.getAttribute("StrokeWeight") ??
-              objectStyles.getAttribute("StrokeWeight");
+              element.getAttribute('StrokeWeight') ??
+              objectStyles.getAttribute('StrokeWeight');
 
             // Use the stroke style as the line's fill
             if (strokeColor) {
-              this.applyFill(block, element, "StrokeColor");
+              this.applyFill(block, element, 'StrokeColor');
             }
 
             // Convert the line's height from points to the CESDK design unit
@@ -480,7 +480,7 @@ export class IDMLParser {
               const height = parseFloat(strokeWeight) / POINT_TO_INCH;
               this.engine.block.setHeight(block, height);
             } else {
-              this.logger.log("No stroke weight found for line", "warning");
+              this.logger.log('No stroke weight found for line', 'warning');
             }
             // Convert the line's dimensions from points to the CESDK design unit
             const x = lineAttributes.x / POINT_TO_INCH;
@@ -498,25 +498,25 @@ export class IDMLParser {
 
           case SPREAD_ELEMENTS.TEXT_FRAME: {
             // Get the parent story of the text frame
-            const parentStoryId = element.getAttribute("ParentStory");
+            const parentStoryId = element.getAttribute('ParentStory');
             const parentStory = this.idml[`Stories/Story_${parentStoryId}.xml`];
 
             // Create a text block
-            const block = this.engine.block.create("//ly.img.ubq/text");
+            const block = this.engine.block.create('//ly.img.ubq/text');
 
             const characterStyleRange = parentStory.querySelectorAll(
-              "CharacterStyleRange"
+              'CharacterStyleRange'
             );
 
             const getContentFromCharacterStyleRange = (range: Element) => {
-              let rangeContent = "";
+              let rangeContent = '';
               Array.from(range.children).forEach((child) => {
                 switch (child.tagName) {
-                  case "Content":
+                  case 'Content':
                     rangeContent += replaceSpecialCharacters(child.innerHTML);
                     break;
-                  case "Br":
-                    rangeContent += "\r\n";
+                  case 'Br':
+                    rangeContent += '\r\n';
                     break;
                 }
               });
@@ -525,7 +525,7 @@ export class IDMLParser {
             // extract the text content from the CharacterStyleRange elements
             const content = Array.from(characterStyleRange)
               .map(getContentFromCharacterStyleRange)
-              .join("");
+              .join('');
 
             // Disable text clipping outside of the text frame
             // This was necessary because InDesign seems to have a lower threshold
@@ -533,21 +533,21 @@ export class IDMLParser {
             // of the text to be clipped in the CESDK Editor
             this.engine.block.setBool(
               block,
-              "text/clipLinesOutsideOfFrame",
+              'text/clipLinesOutsideOfFrame',
               false
             );
             // Set the text content
-            this.engine.block.setString(block, "text/text", content);
+            this.engine.block.setString(block, 'text/text', content);
 
             // the default font
             let font: {
               family: string;
-              style: Font["style"];
-              weight: Font["weight"];
+              style: Font['style'];
+              weight: Font['weight'];
             } = {
               family: DEFAULT_FONT_NAME,
-              style: "normal",
-              weight: "normal",
+              style: 'normal',
+              weight: 'normal'
             };
 
             let length = 0;
@@ -560,7 +560,7 @@ export class IDMLParser {
                   range,
                   content,
                   start,
-                  end: length,
+                  end: length
                 };
               })
               .filter(({ start, end }) => end > start);
@@ -570,17 +570,17 @@ export class IDMLParser {
               async ({ range, start, end }) => {
                 const parentParagraphStyle = range.parentElement;
                 const appliedParagraphStyleId =
-                  parentParagraphStyle?.getAttribute("AppliedParagraphStyle");
+                  parentParagraphStyle?.getAttribute('AppliedParagraphStyle');
                 const appliedParagraphStyle = this.idml[
-                  "Resources/Styles.xml"
+                  'Resources/Styles.xml'
                 ].querySelector(
                   `ParagraphStyle[Self="${appliedParagraphStyleId}"]`
                 );
                 const appliedCharacterStyleId = range.getAttribute(
-                  "AppliedCharacterStyle"
+                  'AppliedCharacterStyle'
                 );
                 const appliedCharacterStyle = this.idml[
-                  "Resources/Styles.xml"
+                  'Resources/Styles.xml'
                 ].querySelector(
                   `CharacterStyle[Self="${appliedCharacterStyleId}"]`
                 );
@@ -590,7 +590,7 @@ export class IDMLParser {
                   appliedParagraphStyle?.getAttribute(attribute);
 
                 // get the text segment color
-                const color = getAttribute("FillColor") ?? "Black";
+                const color = getAttribute('FillColor') ?? 'Black';
                 const rgba = this.colors.get(color);
 
                 if (rgba) {
@@ -598,7 +598,7 @@ export class IDMLParser {
                 }
 
                 // get the text segment font size
-                const fontSize = getAttribute("PointSize");
+                const fontSize = getAttribute('PointSize');
 
                 if (fontSize) {
                   this.engine.block.setTextFontSize(
@@ -609,12 +609,12 @@ export class IDMLParser {
                   );
                 }
                 // get the text segment case
-                const capitalization = getAttribute("Capitalization");
+                const capitalization = getAttribute('Capitalization');
                 switch (capitalization) {
-                  case "AllCaps":
+                  case 'AllCaps':
                     this.engine.block.setTextCase(
                       block,
-                      "Uppercase",
+                      'Uppercase',
                       start,
                       end
                     );
@@ -623,19 +623,19 @@ export class IDMLParser {
 
                 // get the text segment font family and style
                 const fontFamily =
-                  range.querySelector("AppliedFont")?.innerHTML ??
-                  appliedCharacterStyle?.querySelector("AppliedFont")
+                  range.querySelector('AppliedFont')?.innerHTML ??
+                  appliedCharacterStyle?.querySelector('AppliedFont')
                     ?.innerHTML ??
-                  appliedParagraphStyle?.querySelector("AppliedFont")
+                  appliedParagraphStyle?.querySelector('AppliedFont')
                     ?.innerHTML ??
-                  "Roboto";
+                  'Roboto';
                 const { style, weight } = parseFontStyleString(
-                  getAttribute("FontStyle") ?? ""
+                  getAttribute('FontStyle') ?? ''
                 );
                 font = {
                   family: fontFamily,
                   style,
-                  weight,
+                  weight
                 };
 
                 // get the font URI from the font resolver
@@ -647,7 +647,7 @@ export class IDMLParser {
                 if (!typefaceResponse) {
                   this.logger.log(
                     `Could not find typeface for font ${font.family}`,
-                    "warning"
+                    'warning'
                   );
                   return;
                 }
@@ -669,44 +669,44 @@ export class IDMLParser {
             // <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/SomeID">
             // <CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]">
             const firstParagraphStyle = parentStory.querySelector(
-              "ParagraphStyleRange"
+              'ParagraphStyleRange'
             );
             const appliedParagraphStyleId = firstParagraphStyle?.getAttribute(
-              "AppliedParagraphStyle"
+              'AppliedParagraphStyle'
             );
             const appliedParagraphStyle = this.idml[
-              "Resources/Styles.xml"
+              'Resources/Styles.xml'
             ].querySelector(
               `ParagraphStyle[Self="${appliedParagraphStyleId}"]`
             )!;
 
             const justification =
-              firstParagraphStyle?.getAttribute("Justification") ??
-              appliedParagraphStyle?.getAttribute("Justification");
+              firstParagraphStyle?.getAttribute('Justification') ??
+              appliedParagraphStyle?.getAttribute('Justification');
 
             // set the text alignment
             switch (justification) {
-              case "LeftAlign":
+              case 'LeftAlign':
                 this.engine.block.setEnum(
                   block,
-                  "text/horizontalAlignment",
-                  "Left"
+                  'text/horizontalAlignment',
+                  'Left'
                 );
                 break;
 
-              case "CenterAlign":
+              case 'CenterAlign':
                 this.engine.block.setEnum(
                   block,
-                  "text/horizontalAlignment",
-                  "Center"
+                  'text/horizontalAlignment',
+                  'Center'
                 );
                 break;
 
-              case "RightAlign":
+              case 'RightAlign':
                 this.engine.block.setEnum(
                   block,
-                  "text/horizontalAlignment",
-                  "Right"
+                  'text/horizontalAlignment',
+                  'Right'
                 );
                 break;
             }
@@ -733,12 +733,12 @@ export class IDMLParser {
             this.engine.block.setPositionX(block, x);
             this.engine.block.setPositionY(block, y);
 
-            const fillColor = element.getAttribute("FillColor");
+            const fillColor = element.getAttribute('FillColor');
             const rgba = this.colors.get(fillColor!);
 
             if (rgba) {
-              this.engine.block.setBool(block, "backgroundColor/enabled", true);
-              this.engine.block.setColor(block, "backgroundColor/color", rgba);
+              this.engine.block.setBool(block, 'backgroundColor/enabled', true);
+              this.engine.block.setColor(block, 'backgroundColor/color', rgba);
             }
 
             this.engine.block.appendChild(pageBlock, block);
@@ -793,10 +793,10 @@ export class IDMLParser {
   private copyElementName(element: Element, block: number) {
     this.engine.block.setName(
       block,
-      element.getAttribute("Name")?.replace("$ID/", "") ?? ""
+      element.getAttribute('Name')?.replace('$ID/', '') ?? ''
     );
     // Also set metadata for the block based on the ID
-    const id = element.getAttribute("Self");
+    const id = element.getAttribute('Self');
     if (id) {
       setBlockIDMLId(this.engine, block, id);
     }
@@ -813,12 +813,12 @@ export class IDMLParser {
   private applyFill(
     block: number,
     element: Element,
-    attributeName = "FillColor"
+    attributeName = 'FillColor'
   ) {
     // Get the inherited styles of the element to use as fallback
     // if the element does not have a fill styles
-    const appliedObjectStyle = element.getAttribute("AppliedObjectStyle")!;
-    const objectStyles = this.idml["Resources/Styles.xml"].querySelector(
+    const appliedObjectStyle = element.getAttribute('AppliedObjectStyle')!;
+    const objectStyles = this.idml['Resources/Styles.xml'].querySelector(
       `ObjectStyle[Self="${appliedObjectStyle}"]`
     )!;
 
@@ -835,20 +835,20 @@ export class IDMLParser {
     // from the document colors using the ID and apply the fill to the block
     if (this.colors.has(fillColor)) {
       const color = this.colors.get(fillColor)!;
-      const fill = this.engine.block.createFill("color");
-      this.engine.block.setColor(fill, "fill/color/value", color);
+      const fill = this.engine.block.createFill('color');
+      this.engine.block.setColor(fill, 'fill/color/value', color);
       this.engine.block.setFill(block, fill);
     } else if (this.gradients.has(fillColor)) {
       const gradient = this.gradients.get(fillColor)!;
       const gradientFill = this.engine.block.createFill(gradient.type);
       this.engine.block.setGradientColorStops(
         gradientFill,
-        "fill/gradient/colors",
+        'fill/gradient/colors',
         gradient.stops
       );
-      if (gradient.type === "//ly.img.ubq/fill/gradient/linear") {
+      if (gradient.type === '//ly.img.ubq/fill/gradient/linear') {
         const idmlAngle = parseFloat(
-          element.getAttribute("GradientFillAngle") ?? "0"
+          element.getAttribute('GradientFillAngle') ?? '0'
         );
         const blockAspectRatio =
           this.engine.block.getWidth(block) /
@@ -859,31 +859,31 @@ export class IDMLParser {
         );
         this.engine.block.setFloat(
           gradientFill,
-          "fill/gradient/linear/startPointX",
+          'fill/gradient/linear/startPointX',
           controlPoints.start.x
         );
         this.engine.block.setFloat(
           gradientFill,
-          "fill/gradient/linear/startPointY",
+          'fill/gradient/linear/startPointY',
           controlPoints.start.y
         );
         this.engine.block.setFloat(
           gradientFill,
-          "fill/gradient/linear/endPointX",
+          'fill/gradient/linear/endPointX',
           controlPoints.end.x
         );
         this.engine.block.setFloat(
           gradientFill,
-          "fill/gradient/linear/endPointY",
+          'fill/gradient/linear/endPointY',
           controlPoints.end.y
         );
       }
       this.engine.block.setFill(block, gradientFill);
     } else {
-      if (fillColor !== "Swatch/None") {
+      if (fillColor !== 'Swatch/None') {
         this.logger.log(
           `Fill color ${fillColor} not found in document colors.`,
-          "error"
+          'error'
         );
       }
     }
@@ -898,21 +898,21 @@ export class IDMLParser {
    */
   private applyStroke(block: number, element: Element) {
     // Get the inherited styles of the element to use as fallback
-    const appliedObjectStyle = element.getAttribute("AppliedObjectStyle")!;
-    const objectStyles = this.idml["Resources/Styles.xml"].querySelector(
+    const appliedObjectStyle = element.getAttribute('AppliedObjectStyle')!;
+    const objectStyles = this.idml['Resources/Styles.xml'].querySelector(
       `ObjectStyle[Self="${appliedObjectStyle}"]`
     )!;
 
     // Get the stroke styles from the element or the inherited styles
     const strokeColor =
-      element.getAttribute("StrokeColor") ??
-      objectStyles.getAttribute("StrokeColor");
+      element.getAttribute('StrokeColor') ??
+      objectStyles.getAttribute('StrokeColor');
     const strokeWeight =
-      element.getAttribute("StrokeWeight") ??
-      objectStyles.getAttribute("StrokeWeight");
+      element.getAttribute('StrokeWeight') ??
+      objectStyles.getAttribute('StrokeWeight');
     const strokeAlignment =
-      element.getAttribute("StrokeAlignment") ??
-      objectStyles.getAttribute("StrokeAlignment");
+      element.getAttribute('StrokeAlignment') ??
+      objectStyles.getAttribute('StrokeAlignment');
 
     // If the element has a stroke color, we extract the RGBA values
     // from the document colors using the ID and apply the stroke to the block
@@ -924,16 +924,16 @@ export class IDMLParser {
 
       // Set the stroke alignment
       switch (strokeAlignment) {
-        case "CenterAlignment":
-          this.engine.block.setStrokePosition(block, "Center");
+        case 'CenterAlignment':
+          this.engine.block.setStrokePosition(block, 'Center');
           break;
 
-        case "InsideAlignment":
-          this.engine.block.setStrokePosition(block, "Inner");
+        case 'InsideAlignment':
+          this.engine.block.setStrokePosition(block, 'Inner');
           break;
 
-        case "OutsideAlignment":
-          this.engine.block.setStrokePosition(block, "Outer");
+        case 'OutsideAlignment':
+          this.engine.block.setStrokePosition(block, 'Outer');
           break;
       }
 
@@ -950,14 +950,14 @@ export class IDMLParser {
    */
   private applyTransparency(block: number, element: Element) {
     // Get the transparency settings from the element
-    const transparencySetting = element.querySelector("TransparencySetting");
+    const transparencySetting = element.querySelector('TransparencySetting');
     if (!transparencySetting) return;
 
     // Get the opacity from the transparency settings
     const opacity = parseFloat(
       transparencySetting
-        .querySelector("BlendingSetting")
-        ?.getAttribute("Opacity") ?? "100"
+        .querySelector('BlendingSetting')
+        ?.getAttribute('Opacity') ?? '100'
     );
     this.engine.block.setOpacity(block, opacity / 100);
   }
@@ -975,44 +975,44 @@ export class IDMLParser {
     const imageURI = getImageURI(element, this.logger);
     if (!imageURI) return false;
 
-    const fill = this.engine.block.createFill("image");
-    this.engine.block.setSourceSet(fill, "fill/image/sourceSet", []);
+    const fill = this.engine.block.createFill('image');
+    this.engine.block.setSourceSet(fill, 'fill/image/sourceSet', []);
     try {
       await this.engine.block.addImageFileURIToSourceSet(
         fill,
-        "fill/image/sourceSet",
+        'fill/image/sourceSet',
         imageURI
       );
     } catch (e) {
-      this.logger.log(`Could not load image from URI ${imageURI}`, "error");
+      this.logger.log(`Could not load image from URI ${imageURI}`, 'error');
     }
     this.engine.block.setFill(block, fill);
+    this.engine.block.setKind(block, 'image');
 
-    // Set kind to "image" to enable shape-based clipping
-    // When kind is "image", the engine uses the block's shape as a clipping path
-    // This allows the image fill to be clipped to custom vector paths (polygons)
-    this.engine.block.setKind(block, "image");
-
-    // Check if we should set a specific fill mode based on FrameFittingOption
-    // If all crops are negative, the image is shrunk inside the frame - use Contain mode
-    const frameFittingOption = element.querySelector("FrameFittingOption");
+    // Consider FrameFittingOption when setting the content fill mode
+    // If all frame fitting options are negative, this implies that the image is shrunk inside the frame.	    // Check if we should set a specific fill mode based on FrameFittingOption
+    // Example: FrameFittingOption LeftCrop="-14.222526745057785" TopCrop="-16.089925261496205" RightCrop="-15.077750964903117" BottomCrop="-16.660074738503738" FittingOnEmptyFrame="Proportionally" />	    // If all crops are negative, the image is shrunk inside the frame - use Contain mode
+    // We do not support a crop that makes the image fill smaller than the (graphics block) frame.
+    // We should add a warning and set the content fill to "Contain" in this case.
+    // Fill mode "Contain" will make sure that the image is not cropped and fits the frame.
+    const frameFittingOption = element.querySelector('FrameFittingOption');
     if (frameFittingOption) {
       const [leftCrop, topCrop, rightCrop, bottomCrop] = [
-        "LeftCrop",
-        "TopCrop",
-        "RightCrop",
-        "BottomCrop",
-      ].map((crop) => parseFloat(frameFittingOption.getAttribute(crop) ?? "0"));
+        'LeftCrop',
+        'TopCrop',
+        'RightCrop',
+        'BottomCrop'
+      ].map((crop) => parseFloat(frameFittingOption.getAttribute(crop) ?? '0'));
 
       if (leftCrop < 0 && topCrop < 0 && rightCrop < 0 && bottomCrop < 0) {
-        // Negative crops mean the image is shrunk - use Contain to prevent cropping
-        this.engine.block.setContentFillMode(block, "Contain");
+        this.logger.log(
+          // Negative crops mean the image is shrunk - use Contain to prevent cropping
+          'The image is shrunk inside the frame using. This is currently not supported and might lead to unexpected results.',
+          'warning'
+        );
+        this.engine.block.setContentFillMode(block, 'Contain');
       }
     }
-    // NOTE: We don't explicitly set a fill mode in the normal case.
-    // This allows the engine to use its default behavior, which produces better results
-    // than always using "Cover" mode (which can cause excessive zooming).
-
     return true;
   }
 
@@ -1025,18 +1025,18 @@ export class IDMLParser {
   private applyBorderRadius(block: number, element: Element) {
     // Maps the IDML corner attributes to the corresponding CESDK corner attributes
     const cornerAttributeMap = {
-      TopLeft: "TL",
-      TopRight: "TR",
-      BottomLeft: "BL",
-      BottomRight: "BR",
+      TopLeft: 'TL',
+      TopRight: 'TR',
+      BottomLeft: 'BL',
+      BottomRight: 'BR'
     };
 
     const shape = this.engine.block.getShape(block);
     const shapeType = this.engine.block.getType(shape);
-    if (!shape || shapeType !== "//ly.img.ubq/shape/rect") {
+    if (!shape || shapeType !== '//ly.img.ubq/shape/rect') {
       this.logger.log(
-        "Border radius currently can only be applied to rectangle shapes.",
-        "warning"
+        'Border radius currently can only be applied to rectangle shapes.',
+        'warning'
       );
       return;
     }
@@ -1045,7 +1045,7 @@ export class IDMLParser {
       if (!element.getAttribute(`${idmlName}CornerOption`)) return;
 
       const radius =
-        parseFloat(element.getAttribute(`${idmlName}CornerRadius`) ?? "0") /
+        parseFloat(element.getAttribute(`${idmlName}CornerRadius`) ?? '0') /
         POINT_TO_INCH;
       if (radius === 0) return;
 
@@ -1055,93 +1055,5 @@ export class IDMLParser {
         radius
       );
     });
-  }
-
-  /**
-   * Parses the FrameFittingOption crop values and applies them to a CESDK block
-   * InDesign uses FrameFittingOption to control how images are positioned and cropped within frames
-   * The crop values define which parts of the source image should be trimmed away
-   * @param block The CESDK block to apply the frame fitting to
-   * @param element The IDML element
-   * @returns void
-   */
-  private applyFrameFittingOption(block: number, element: Element) {
-    const frameFittingOption = element.querySelector("FrameFittingOption");
-    if (!frameFittingOption) return;
-
-    // Get crop values from FrameFittingOption (in points)
-    const leftCrop = parseFloat(
-      frameFittingOption.getAttribute("LeftCrop") ?? "0"
-    );
-    const topCrop = parseFloat(
-      frameFittingOption.getAttribute("TopCrop") ?? "0"
-    );
-    const rightCrop = parseFloat(
-      frameFittingOption.getAttribute("RightCrop") ?? "0"
-    );
-    const bottomCrop = parseFloat(
-      frameFittingOption.getAttribute("BottomCrop") ?? "0"
-    );
-
-    // If all crops are 0, no adjustment needed
-    if (leftCrop === 0 && topCrop === 0 && rightCrop === 0 && bottomCrop === 0) {
-      return;
-    }
-
-    // Get the image element to determine the original image dimensions
-    const image = element.querySelector("Image");
-    if (!image) return;
-
-    // Get the image's actual dimensions from attributes
-    const actualPpiAttr = image.getAttribute("ActualPpi");
-    if (!actualPpiAttr) return;
-
-    // Get the image transform
-    const imageItemTransform = image
-      .getAttribute("ItemTransform")
-      ?.split(" ")
-      .map(parseFloat);
-    if (!imageItemTransform || imageItemTransform.length < 6) return;
-
-    // The scale factors in the transform
-    const imageScaleX = imageItemTransform[0];
-    const imageScaleY = imageItemTransform[3];
-
-    // Get the frame's dimensions (the polygon/shape dimensions)
-    const frameWidth = this.engine.block.getWidth(block);
-    const frameHeight = this.engine.block.getHeight(block);
-
-    // Convert crop values from points to inches
-    const leftCropInches = leftCrop / POINT_TO_INCH;
-    const topCropInches = topCrop / POINT_TO_INCH;
-    const rightCropInches = rightCrop / POINT_TO_INCH;
-    const bottomCropInches = bottomCrop / POINT_TO_INCH;
-
-    // The visible (non-cropped) portion of the image in the frame
-    const visibleWidth = frameWidth - (leftCropInches + rightCropInches) / Math.abs(imageScaleX);
-    const visibleHeight = frameHeight - (topCropInches + bottomCropInches) / Math.abs(imageScaleY);
-
-    // Calculate how much we need to scale the image to fill the frame
-    // after accounting for the cropped portions
-    const cropScaleX = frameWidth / visibleWidth;
-    const cropScaleY = frameHeight / visibleHeight;
-
-    // Calculate the translation needed to offset the left/top crops
-    // This shifts the image so the visible portion aligns with the frame
-    const cropTranslateX = -(leftCropInches / Math.abs(imageScaleX)) / frameWidth;
-    const cropTranslateY = -(topCropInches / Math.abs(imageScaleY)) / frameHeight;
-
-    // Apply the crop transformation to the block
-    try {
-      this.engine.block.setCropScaleX(block, cropScaleX);
-      this.engine.block.setCropScaleY(block, cropScaleY);
-      this.engine.block.setCropTranslationX(block, cropTranslateX);
-      this.engine.block.setCropTranslationY(block, cropTranslateY);
-    } catch (e) {
-      this.logger.log(
-        "Could not apply frame fitting crop values to block",
-        "warning"
-      );
-    }
   }
 }

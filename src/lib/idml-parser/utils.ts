@@ -117,9 +117,7 @@ export function parsePathGeometry(pathGeometry: Element) {
     // The Anchor attribute contains the x and y coordinates of the point, separated by a space.
     let anchorAttr = point.getAttribute("Anchor")!;
     let [x, y] = anchorAttr.split(" ").map(parseFloat);
-    xValues.push(parseFloat(x));
     xValues.push(x);
-    yValues.push(parseFloat(y));
     yValues.push(y);
 
     // Include the Bézier control points in the bounding box calculation as Bézier curves can extend

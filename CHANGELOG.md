@@ -1,5 +1,11 @@
 # @imgly/idml-importer
 
+## 1.1.12
+
+### Patch Changes
+
+- 3fbd62e: Fixes an issue where shaped images with Bézier curves gets flattened.
+
 ## 1.1.11
 
 ### Patch Changes

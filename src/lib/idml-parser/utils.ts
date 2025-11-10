@@ -115,6 +115,7 @@ export function parsePathGeometry(pathGeometry: Element) {
   // Iterates over each PathPointType to extract x and y coordinates
   Array.from(points).forEach((point) => {
     // The Anchor attribute contains the x and y coordinates of the point, separated by a space.
+    let anchorAttr = point.getAttribute("Anchor")!;
     let [x, y] = anchorAttr.split(" ").map(parseFloat);
     xValues.push(parseFloat(x));
     xValues.push(x);

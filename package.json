@@ -1,6 +1,6 @@
 {
   "name": "@imgly/idml-importer",
-  "version": "1.1.12",
+  "version": "1.1.13",
   "module": "dist/browser.js",
   "types": "dist/browser.d.ts",
   "type": "module",
@@ -24,12 +24,12 @@
     "@cesdk/engine": "^1.40.0",
     "@cesdk/node": "^1.40.0",
     "@changesets/cli": "^2.29.4",
+    "bun": "^1.2.21",
     "bun-plugin-dts": "^0.2.0",
     "bun-types": "latest",
+    "glob": "7.0.3",
     "jest-image-snapshot": "^6.2.0",
-    "jsdom": "^22.1.0",
-    "bun": "^1.2.21",
-    "glob": "7.0.3"
+    "jsdom": "^22.1.0"
   },
   "peerDependencies": {
     "@cesdk/engine": "^1.40.0 ",
@@ -56,7 +56,8 @@
     "prepare-files": "./scripts/prepare-files.sh",
     "build": "rm -rf dist/ && mkdir -p dist/assets && cp -r ./assets/ dist/ && bun run build.ts",
     "test": "bun test src/test/idml-parser.test.ts",
-    "publish": "npm run build && npm publish --access public"
+    "publish": "npm run build && npm publish --access public",
+    "deploy-assets": "bash -c 'source .env && aws s3 sync --endpoint-url $S3_ENDPOINT_URL dist s3://$S3_BUCKET_NAME/@imgly/idml-importer/$npm_package_version'"
   },
   "dependencies": {
     "jszip": "^3.10.1"

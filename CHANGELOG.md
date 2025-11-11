@@ -1,5 +1,11 @@
 # @imgly/idml-importer
 
+## 1.1.13
+
+### Patch Changes
+
+- Fix: Curvy edges for image clipping not being applied
+
 ## 1.1.12
 
 ### Patch Changes

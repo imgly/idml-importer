@@ -57,7 +57,7 @@
     "build": "rm -rf dist/ && mkdir -p dist/assets && cp -r ./assets/ dist/ && bun run build.ts",
     "test": "bun test src/test/idml-parser.test.ts",
     "publish": "npm run build && npm publish --access public",
-    "deploy-assets": "bash -c 'source .env && aws s3 sync --endpoint-url $S3_ENDPOINT_URL dist s3://$S3_BUCKET_NAME/@imgly/idml-importer/$npm_package_version'"
+    "deploy-assets": "bash -c 'source .env && aws s3 sync --endpoint-url $S3_ENDPOINT_URL dist s3://$S3_BUCKET_NAME/imgly/idml-importer/$npm_package_version/dist'"
   },
   "dependencies": {
     "jszip": "^3.10.1"

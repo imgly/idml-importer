@@ -1,5 +1,6 @@
 import type CreativeEngine from "@cesdk/engine";
 import type { Color, Font } from "@cesdk/engine";
+import { createBufferURLFromDataURI } from "./buffer-url";
 import {
   calculateSplitIndices,
   getTextFramesWithBlocks,
@@ -978,10 +979,16 @@ export class IDMLParser {
     const fill = this.engine.block.createFill("image");
     this.engine.block.setSourceSet(fill, "fill/image/sourceSet", []);
     try {
+      // Convert data URIs to buffer URLs for transient resource management
+      // This enables CE.SDK's native APIs: findAllTransientResources(), getBufferData(), relocateResource()
+      let finalImageURI = imageURI;
+      if (imageURI.startsWith("data:")) {
+        finalImageURI = await createBufferURLFromDataURI(this.engine, imageURI);
+      }
       await this.engine.block.addImageFileURIToSourceSet(
         fill,
         "fill/image/sourceSet",
-        imageURI
+        finalImageURI
       );
     } catch (e) {
       this.logger.log(`Could not load image from URI ${imageURI}`, "error");

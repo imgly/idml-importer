@@ -1,5 +1,13 @@
 # @imgly/idml-importer
 
+## 1.2.0
+
+### Minor Changes
+
+- Added support for transient resource relocation using CE.SDK native APIs
+- Images now use internal buffer URLs instead of data URIs, enabling `findAllTransientResources()`, `getBufferData()`, and `relocateResource()` APIs
+- Added documentation for saving scenes with stable URLs
+
 ## 1.1.13
 
 ### Patch Changes

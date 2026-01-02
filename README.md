@@ -66,6 +66,53 @@ console.log("The imported IDML file looks like:", sceneExportUrl);
 // You can now e.g export the scene as archive with engine.scene.saveToArchive()
 ```
 
+## Saving Scenes with Stable URLs
+
+By default, the IDML importer creates internal `buffer://` URLs for embedded images. These are transient resources that work well when saving to an archive (`engine.scene.saveToArchive()`), which bundles all assets together.
+
+However, if you want to save scenes as JSON strings (`engine.scene.saveToString()`) with stable, permanent URLs (e.g., for storing in a database or referencing CDN-hosted assets), you need to relocate the transient resources first.
+
+### Why Relocate?
+
+- **Scene Archives** (`saveToArchive`): Include all assets in a single ZIP file. Transient `buffer://` URLs work fine.
+- **Scene Strings** (`saveToString`): Only contain references to assets. Transient URLs won't work when reloading the scene later. You need permanent URLs (e.g., `https://`).
+
+### How to Relocate Transient Resources
+
+After parsing the IDML file, use CE.SDK's native APIs to find and relocate all transient resources:
+
+```js
+// 1. Parse the IDML file
+const parser = await IDMLParser.fromFile(engine, blob, (content) =>
+  new DOMParser().parseFromString(content, "text/xml")
+);
+await parser.parse();
+
+// 2. Find all transient resources (embedded images from the IDML)
+const transientResources = engine.editor.findAllTransientResources();
+
+// 3. Upload each resource and relocate to permanent URL
+for (const resource of transientResources) {
+  const { URL: bufferUri, size } = resource;
+
+  // Extract binary data from the buffer
+  const data = engine.editor.getBufferData(bufferUri, 0, size);
+
+  // Upload to your backend/CDN (implement your own upload logic)
+  const permanentUrl = await uploadToBackend(data);
+
+  // Relocate the resource to the permanent URL
+  engine.editor.relocateResource(bufferUri, permanentUrl);
+}
+
+// 4. Now save to string - all URLs will be permanent
+const sceneString = await engine.scene.saveToString();
+```
+
+### Note on Font URLs
+
+When using `addGoogleFontsAssetLibrary()` (the default font resolver), the resulting scene string will contain Google CDN URLs for fonts. If you need fonts hosted on your own infrastructure, configure a custom font resolver instead of using the default Google Fonts integration.
+
 ## NodeJS Quick-Start Example
 
 When using in NodeJS, you need to provide a DOM implementation. We recommend using JSDOM.

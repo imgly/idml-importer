@@ -7,9 +7,11 @@ import {
   orderTextFrames,
   updateFrameContents,
 } from "./features/split-text-frames";
+import { FontRenderingAdapter } from "./font-metrics";
 import type { TypefaceResolver } from "./font-resolver";
 import defaultFontResolver from "./font-resolver";
 import { Logger } from "./logger";
+import { adjustLineHeight } from "./text-adjustments";
 import type { Gradient, IDML } from "./types";
 import {
   angleToGradientControlPoints,
@@ -32,6 +34,18 @@ const DESIGN_UNIT = "Inch";
 // of points used in IDML."
 const POINT_TO_INCH = 72;
 const DEFAULT_FONT_NAME = "Roboto";
+
+// InDesign defaults to Auto leading (120% of font size)
+const DEFAULT_AUTO_LEADING_PERCENT = 120;
+const DEFAULT_LINE_HEIGHT = DEFAULT_AUTO_LEADING_PERCENT / 100;
+
+// Mapping from IDML VerticalJustification values to CE.SDK text/verticalAlignment values
+const VERTICAL_JUSTIFICATION_MAP: Record<string, string | undefined> = {
+  TopAlign: "Top",
+  CenterAlign: "Center",
+  BottomAlign: "Bottom",
+  // JustifyAlign is not supported by CE.SDK
+};
 
 // Element types of the spreads in the IDML file
 const SPREAD_ELEMENTS = {
@@ -59,6 +73,8 @@ export class IDMLParser {
   private spreads: Document[];
   // A list of errors and warnings that occurred during the parsing process
   private logger = new Logger();
+  // Font metrics adapter for line height adjustments
+  private fontRenderingAdapter = new FontRenderingAdapter();
 
   private constructor(
     engine: CreativeEngine,
@@ -251,7 +267,7 @@ export class IDMLParser {
     // 2. Process multi-frame stories
     Object.entries(storiesMap)
       .filter(([_, tfs]) => tfs.length > 1)
-      .forEach(([storyId, storyFrames]) => {
+      .forEach(([_, storyFrames]) => {
         const orderedFrames = orderTextFrames(storyFrames);
         if (!orderedFrames || orderedFrames.length < 2) return; // Skip if ordering failed or too few frames
 
@@ -712,6 +728,29 @@ export class IDMLParser {
                 break;
             }
 
+            // Get and set line height (leading)
+            let lineHeight = this.getLineHeightFromIDML(
+              firstParagraphStyle,
+              appliedParagraphStyle
+            );
+
+            // Adjust line height for CE.SDK rendering
+            // InDesign calculates line height based on ascender-to-descender distance,
+            // while CE.SDK uses the em-square. We need to convert using font metrics.
+            const fontUri = this.engine.block.getString(
+              block,
+              "text/fontFileUri"
+            );
+            if (fontUri) {
+              const metricsResult =
+                await this.fontRenderingAdapter.load(fontUri);
+              if (metricsResult.metrics) {
+                lineHeight = adjustLineHeight(lineHeight, metricsResult.metrics);
+              }
+            }
+
+            this.engine.block.setFloat(block, "text/lineHeight", lineHeight);
+
             this.applyTransparency(block, element);
 
             this.engine.block.appendChild(pageBlock, block);
@@ -733,6 +772,31 @@ export class IDMLParser {
             this.engine.block.setRotation(block, textFrameAttributes.rotation);
             this.engine.block.setPositionX(block, x);
             this.engine.block.setPositionY(block, y);
+
+            // Get vertical alignment from TextFramePreference
+            const textFramePreference = element.querySelector(
+              "TextFramePreference"
+            );
+            const verticalJustification =
+              textFramePreference?.getAttribute("VerticalJustification");
+
+            if (verticalJustification) {
+              const verticalAlignment =
+                VERTICAL_JUSTIFICATION_MAP[verticalJustification];
+              if (verticalAlignment) {
+                this.engine.block.setEnum(
+                  block,
+                  "text/verticalAlignment",
+                  verticalAlignment
+                );
+              } else if (verticalJustification === "JustifyAlign") {
+                // CE.SDK doesn't support justified vertical alignment
+                this.logger.log(
+                  "Justified vertical alignment is not supported. Using top alignment.",
+                  "warning"
+                );
+              }
+            }
 
             const fillColor = element.getAttribute("FillColor");
             const rgba = this.colors.get(fillColor!);
@@ -1059,5 +1123,64 @@ export class IDMLParser {
         radius
       );
     });
+  }
+
+  /**
+   * Extracts the line height multiplier from IDML paragraph/character style elements.
+   * Leading can be specified as an explicit value in points or as "Auto".
+   *
+   * @param paragraphStyleRange - The ParagraphStyleRange element from the story
+   * @param appliedParagraphStyle - The resolved ParagraphStyle from Styles.xml
+   * @returns The line height as a multiplier (e.g., 1.2 for 120%)
+   */
+  private getLineHeightFromIDML(
+    paragraphStyleRange: Element | null,
+    appliedParagraphStyle: Element | null
+  ): number {
+    const characterStyleRange = paragraphStyleRange?.querySelector(
+      "CharacterStyleRange"
+    );
+    const leadingElement =
+      characterStyleRange?.querySelector("Leading") ??
+      appliedParagraphStyle?.querySelector("Leading");
+
+    // Get the font size for calculating line height multiplier
+    const fontSize = parseFloat(
+      characterStyleRange?.getAttribute("PointSize") ??
+        appliedParagraphStyle?.getAttribute("PointSize") ??
+        "12"
+    );
+
+    if (!leadingElement) {
+      // No explicit leading - use Auto leading setting
+      const autoLeading = parseFloat(
+        appliedParagraphStyle?.getAttribute("AutoLeading") ??
+          String(DEFAULT_AUTO_LEADING_PERCENT)
+      );
+      return autoLeading / 100;
+    }
+
+    const leadingType = leadingElement.getAttribute("type");
+
+    if (leadingType === "unit") {
+      // Explicit leading value in points - convert to multiplier
+      const leadingValue = parseFloat(leadingElement.innerHTML);
+      return leadingValue / fontSize;
+    }
+
+    if (
+      leadingType === "enumeration" &&
+      leadingElement.innerHTML === "Auto"
+    ) {
+      // Auto leading - use AutoLeading percentage
+      const autoLeading = parseFloat(
+        appliedParagraphStyle?.getAttribute("AutoLeading") ??
+          String(DEFAULT_AUTO_LEADING_PERCENT)
+      );
+      return autoLeading / 100;
+    }
+
+    // Fallback to default
+    return DEFAULT_LINE_HEIGHT;
   }
 }

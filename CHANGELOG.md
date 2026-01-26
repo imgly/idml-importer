@@ -1,5 +1,13 @@
 # @imgly/idml-importer
 
+## 1.2.1
+
+### Patch Changes
+
+- Added line height (leading) support for text frames with explicit values and Auto leading
+- Added vertical alignment support for text frames (Top, Center, Bottom)
+- Added font metrics extraction module for accurate line height conversion between InDesign and CE.SDK
+
 ## 1.2.0
 
 ### Minor Changes

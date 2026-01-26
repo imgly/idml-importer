@@ -7,9 +7,11 @@ import {
   orderTextFrames,
   updateFrameContents,
 } from "./features/split-text-frames";
+import { FontRenderingAdapter } from "./font-metrics";
 import type { TypefaceResolver } from "./font-resolver";
 import defaultFontResolver from "./font-resolver";
 import { Logger } from "./logger";
+import { adjustLineHeight } from "./text-adjustments";
 import type { Gradient, IDML } from "./types";
 import {
   angleToGradientControlPoints,
@@ -59,6 +61,8 @@ export class IDMLParser {
   private spreads: Document[];
   // A list of errors and warnings that occurred during the parsing process
   private logger = new Logger();
+  // Font metrics adapter for line height adjustments
+  private fontRenderingAdapter = new FontRenderingAdapter();
 
   private constructor(
     engine: CreativeEngine,
@@ -712,6 +716,68 @@ export class IDMLParser {
                 break;
             }
 
+            // Get and set line height (leading)
+            // Leading can be specified as an explicit value or as "Auto"
+            const firstCharacterStyleRange =
+              firstParagraphStyle?.querySelector("CharacterStyleRange");
+            const leadingElement =
+              firstCharacterStyleRange?.querySelector("Leading") ??
+              appliedParagraphStyle?.querySelector("Leading");
+
+            // Get the font size for calculating line height multiplier
+            const fontSizeForLeading = parseFloat(
+              firstCharacterStyleRange?.getAttribute("PointSize") ??
+                appliedParagraphStyle?.getAttribute("PointSize") ??
+                "12"
+            );
+
+            // Calculate the raw line height multiplier
+            let lineHeight: number;
+            if (leadingElement) {
+              const leadingType = leadingElement.getAttribute("type");
+              if (leadingType === "unit") {
+                // Explicit leading value in points - convert to multiplier
+                const leadingValue = parseFloat(leadingElement.innerHTML);
+                lineHeight = leadingValue / fontSizeForLeading;
+              } else if (
+                leadingType === "enumeration" &&
+                leadingElement.innerHTML === "Auto"
+              ) {
+                // Auto leading - use AutoLeading percentage (default 120%)
+                const autoLeading = parseFloat(
+                  appliedParagraphStyle?.getAttribute("AutoLeading") ?? "120"
+                );
+                lineHeight = autoLeading / 100;
+              } else {
+                // Fallback to default auto leading
+                lineHeight = 1.2;
+              }
+            } else {
+              // No explicit leading - use Auto leading setting
+              // InDesign defaults to Auto leading (120% of font size)
+              const autoLeading = parseFloat(
+                appliedParagraphStyle?.getAttribute("AutoLeading") ?? "120"
+              );
+              lineHeight = autoLeading / 100;
+            }
+
+            // Adjust line height for CE.SDK rendering
+            // InDesign calculates line height based on ascender-to-descender distance,
+            // while CE.SDK uses the em-square. We need to convert using font metrics.
+            const fontUri = this.engine.block.getString(
+              block,
+              "text/fontFileUri"
+            );
+            if (fontUri) {
+              const metricsResult =
+                await this.fontRenderingAdapter.load(fontUri);
+              if (metricsResult.metrics) {
+                lineHeight = adjustLineHeight(lineHeight, metricsResult.metrics);
+              }
+            }
+
+            this.engine.block.setFloat(block, "text/lineHeight", lineHeight);
+
             this.applyTransparency(block, element);
 
             this.engine.block.appendChild(pageBlock, block);
@@ -733,6 +799,52 @@ export class IDMLParser {
             this.engine.block.setRotation(block, textFrameAttributes.rotation);
             this.engine.block.setPositionX(block, x);
             this.engine.block.setPositionY(block, y);
+
+            // Get vertical alignment from TextFramePreference
+            const textFramePreference = element.querySelector(
+              "TextFramePreference"
+            );
+            const verticalJustification =
+              textFramePreference?.getAttribute("VerticalJustification");
+
+            if (verticalJustification) {
+              switch (verticalJustification) {
+                case "TopAlign":
+                  this.engine.block.setEnum(
+                    block,
+                    "text/verticalAlignment",
+                    "Top"
+                  );
+                  break;
+                case "CenterAlign":
+                  this.engine.block.setEnum(
+                    block,
+                    "text/verticalAlignment",
+                    "Center"
+                  );
+                  break;
+                case "BottomAlign":
+                  this.engine.block.setEnum(
+                    block,
+                    "text/verticalAlignment",
+                    "Bottom"
+                  );
+                  break;
+                case "JustifyAlign":
+                  // CE.SDK doesn't support justified vertical alignment
+                  // Fall back to top alignment and log a warning
+                  this.logger.log(
+                    "Justified vertical alignment is not supported. Using top alignment.",
+                    "warning"
+                  );
+                  this.engine.block.setEnum(
+                    block,
+                    "text/verticalAlignment",
+                    "Top"
+                  );
+                  break;
+              }
+            }
 
             const fillColor = element.getAttribute("FillColor");
             const rgba = this.colors.get(fillColor!);

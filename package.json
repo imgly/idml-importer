@@ -60,7 +60,9 @@
     "deploy:cdn": "op run --env-file=.env -- rclone sync ./dist r2:imgly-cdn/imgly/idml-importer/$npm_package_version/dist/"
   },
   "dependencies": {
-    "jszip": "^3.10.1"
+    "jszip": "^3.10.1",
+    "opentype.js": "^1.3.4",
+    "woff2-encoder": "^2.0.0"
   },
   "exports": {
     ".": {

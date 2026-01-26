@@ -267,7 +267,7 @@ export class IDMLParser {
     // 2. Process multi-frame stories
     Object.entries(storiesMap)
       .filter(([_, tfs]) => tfs.length > 1)
-      .forEach(([storyId, storyFrames]) => {
+      .forEach(([_, storyFrames]) => {
         const orderedFrames = orderTextFrames(storyFrames);
         if (!orderedFrames || orderedFrames.length < 2) return; // Skip if ordering failed or too few frames
 

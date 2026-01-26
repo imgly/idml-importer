@@ -3,7 +3,7 @@
  *
  * This module provides functionality to extract font metrics (ascender, descender,
  * unitsPerEm) from font files. These metrics are essential for accurate text
- * positioning when importing PSD files into CE.SDK.
+ * positioning when importing design files (PSD/IDML) into CE.SDK.
  *
  * Supported formats: TTF, OTF, WOFF, WOFF2
  *
@@ -32,7 +32,7 @@
  * adapter.clear();
  * ```
  *
- * For PSD-specific text adjustments, see `psd-text-adjustments.ts`.
+ * For text adjustments, see `text-adjustments.ts`.
  */
 
 // @ts-expect-error - opentype.js lacks TypeScript declarations

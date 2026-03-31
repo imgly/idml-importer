@@ -401,25 +401,35 @@ function extractEmbeddedImage(image: Element, logger: Logger): string | null {
     .map((s) => s.groups?.base64 ?? "")
     .join("");
 
-  // Get the image type
+  // Detect MIME type from ImageTypeName attribute
   const imageType = image.getAttribute("ImageTypeName");
-
   let type = "";
 
-  switch (true) {
-    case image.tagName === "Image" &&
-      (imageType?.includes("JPEG") || imageType?.includes("JPG")):
-      type = "image/jpeg";
-      break;
-
-    case image.tagName === "Image" && imageType?.includes("PNG"):
-      type = "image/png";
-      break;
-
-    case image.tagName === "SVG":
-      type = "image/svg+xml";
+  if (image.tagName === "SVG") {
+    type = "image/svg+xml";
+  } else if (imageType?.includes("JPEG") || imageType?.includes("JPG")) {
+    type = "image/jpeg";
+  } else if (imageType?.includes("PNG")) {
+    type = "image/png";
+  } else if (imageType?.includes("BMP")) {
+    type = "image/bmp";
+  } else if (imageType?.toUpperCase().includes("WEBP")) {
+    type = "image/webp";
   }
 
+  // InDesign 2026+ (v21.3) may set ImageTypeName to "$ID/" (empty placeholder).
+  // Fall back to detecting MIME type from base64 magic bytes.
+  if (!type && cdata) {
+    if (cdata.startsWith("/9j/")) {
+      type = "image/jpeg";
+    } else if (cdata.startsWith("iVBOR")) {
+      type = "image/png";
+    } else if (cdata.startsWith("Qk")) {
+      type = "image/bmp";
+    } else if (cdata.startsWith("UklGR")) {
+      type = "image/webp";
+    }
+  }
   // Return the image URI as a base64 data URI
   if (cdata) {
     return `data:${type};base64,${cdata}`;

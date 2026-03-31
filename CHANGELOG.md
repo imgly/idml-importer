@@ -1,5 +1,11 @@
 # @imgly/idml-importer
 
+## 1.2.2
+
+### Patch Changes
+
+- Fixed embedded image detection for InDesign 2026+ (v21.3) IDML files where ImageTypeName is no longer populated by adding base64 magic bytes fallback for MIME type detection (JPEG, PNG, BMP, WebP)
+
 ## 1.2.1
 
 ### Patch Changes

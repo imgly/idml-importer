@@ -438,8 +438,8 @@ export class IDMLParser {
             if (!hasImageFill) {
               // Fill needs to be applied after setting height and width, because gradient fills need the dimensions
               this.applyFill(block, element);
-              this.applyBorderRadius(block, element);
             }
+            this.applyBorderRadius(block, element);
             // If this element does not have a fill until now, we add a fill block but disable it.
             // This is necessary because the CESDK Editor requires a fill block to be present.
             if (

@@ -1,5 +1,11 @@
 # @imgly/idml-importer
 
+## 1.2.3
+
+### Patch Changes
+
+- Fixed rounded corners not being applied to image-containing rectangles in IDML files
+
 ## 1.2.2
 
 ### Patch Changes
